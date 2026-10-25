@@ -1,0 +1,103 @@
+# AllIn: builds, signs and publishes a self-update release on GitHub's machines (no local build needed).
+#
+# Runs when gradle.properties changes on the allin branch (i.e. after bumping allinRevision), or by hand from
+# the Actions tab. Skips if a release for this version already exists. The installed apps update from the
+# release's latest.json (see APK_UPDATE_MANIFEST_URL / allinUpdateManifestUrl).
+#
+# Secrets (Settings > Secrets and variables > Actions): ALLIN_KEYSTORE_B64 (base64 of allin-release.jks)
+# and ALLIN_KEYSTORE_PASSWORD.
+
+name: AllIn release
+
+on:
+  push:
+    branches: [ allin ]
+    paths: [ gradle.properties ]
+  workflow_dispatch:
+
+concurrency:
+  group: allin-release
+  cancel-in-progress: false
+
+permissions:
+  contents: write # to create the release
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+
+    steps:
+    - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      with:
+        submodules: true
+        lfs: true
+
+    - name: Work out the version
+      id: version
+      run: |
+        props() { grep -E "^$1=" gradle.properties | cut -d= -f2 | tr -d '\r'; }
+        signal=$(grep -E '^val canonicalVersionName' app/build.gradle.kts | sed -E 's/.*"(.*)".*/\1/')
+        version="$signal-allin.$(props allinRevision)"
+        echo "name=$version" >> "$GITHUB_OUTPUT"
+        if gh release view "v$version" >/dev/null 2>&1; then
+          echo "Release v$version already exists, nothing to do."
+          echo "exists=true" >> "$GITHUB_OUTPUT"
+        fi
+      env:
+        GH_TOKEN: ${{ github.token }}
+
+    - name: set up JDK 21
+      if: steps.version.outputs.exists != 'true'
+      uses: actions/setup-java@03ad4de0992f5dab5e18fcb136590ce7c4a0ac95 # v5
+      with:
+        distribution: temurin
+        java-version: 21
+
+    - name: Set up Gradle
+      if: steps.version.outputs.exists != 'true'
+      uses: gradle/actions/setup-gradle@3f131e8634966bd73d06cc69884922b02e6faf92 # v6
+
+    - name: Install the signing key
+      if: steps.version.outputs.exists != 'true'
+      run: |
+        keys="$(dirname "$GITHUB_WORKSPACE")/keys"   # matches allinKeystoreProperties=../keys/keystore.properties
+        mkdir -p "$keys"
+        echo "$ALLIN_KEYSTORE_B64" | base64 -d > "$keys/allin-release.jks"
+        printf 'storeFile=%s\nstorePassword=%s\nkeyAlias=allin\nkeyPassword=%s\n' \
+          "$keys/allin-release.jks" "$ALLIN_KEYSTORE_PASSWORD" "$ALLIN_KEYSTORE_PASSWORD" > "$keys/keystore.properties"
+      env:
+        ALLIN_KEYSTORE_B64: ${{ secrets.ALLIN_KEYSTORE_B64 }}
+        ALLIN_KEYSTORE_PASSWORD: ${{ secrets.ALLIN_KEYSTORE_PASSWORD }}
+
+    - name: Build the release APK
+      if: steps.version.outputs.exists != 'true'
+      run: ./gradlew --no-daemon assembleWebsiteProdRelease
+
+    - name: Publish the release
+      if: steps.version.outputs.exists != 'true'
+      run: |
+        version="${{ steps.version.outputs.name }}"
+        apk=$(ls app/build/outputs/apk/websiteProd/release/*universal*.apk | head -1)
+        aapt2=$(ls -d "$ANDROID_HOME"/build-tools/*/ | sort -V | tail -1)aapt2
+        badging=$("$aapt2" dump badging "$apk" | grep '^package:')
+        version_code=$(echo "$badging" | sed -E "s/.*versionCode='([0-9]+)'.*/\1/")
+        built_name=$(echo "$badging" | sed -E "s/.*versionName='([^']+)'.*/\1/")
+        [ "$built_name" = "$version" ] || { echo "Built $built_name but expected $version"; exit 1; }
+
+        asset="AllIn-$version.apk"
+        cp "$apk" "$asset"
+        cat > latest.json <<EOF
+        {
+          "versionCode": $version_code,
+          "versionName": "$version",
+          "url": "https://github.com/${{ github.repository }}/releases/download/v$version/$asset",
+          "sha256sum": "$(sha256sum "$asset" | cut -d' ' -f1)",
+          "uploadTimestamp": $(date +%s%3N)
+        }
+        EOF
+        gh release create "v$version" "$asset" latest.json --target "$GITHUB_SHA" --title "AllIn $version" \
+          --notes "${NOTES:-AllIn update}"
+      env:
+        GH_TOKEN: ${{ github.token }}
+        NOTES: ${{ github.event.head_commit.message }}

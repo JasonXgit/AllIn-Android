@@ -1,5 +1,8 @@
 # AllIn: builds a signed release APK and publishes it as a GitHub release that installed copies update from.
 #
+# Normally you don't need this: pushing an allinRevision bump to the allin branch makes GitHub build and publish
+# the release (.github/workflows/allin-release.yml). This script is the local fallback.
+#
 # Usage (from the Signal-Android folder):  powershell -File scripts\allin-release.ps1 [-Notes "What changed"]
 # Before running: bump allinRevision in gradle.properties and commit, or the installed app won't see an update.
 # Needs: JDK 21 (JAVA_HOME_21), Android SDK (ANDROID_HOME), gh logged in, and the key in ..\keys.
