@@ -124,7 +124,7 @@ private fun FantasyRow(summary: String?, onClick: () -> Unit) {
         .weight(1f)
         .padding(start = 16.dp)
     ) {
-      Text(text = "Fantasy Football", style = MaterialTheme.typography.bodyLarge)
+      Text(text = "Fantasy Football", style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurface)
       Text(
         text = summary ?: "Your ESPN leagues",
         style = MaterialTheme.typography.bodyMedium,
