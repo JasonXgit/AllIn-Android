@@ -8,6 +8,7 @@ import android.widget.TextView;
 
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
+import androidx.compose.ui.platform.ComposeView;
 
 import androidx.lifecycle.LifecycleOwner;
 import androidx.recyclerview.widget.DiffUtil;
@@ -22,6 +23,8 @@ import org.thoughtcrime.securesms.BindableConversationListItem;
 import org.thoughtcrime.securesms.R;
 import org.thoughtcrime.securesms.conversationlist.model.Conversation;
 import org.thoughtcrime.securesms.conversationlist.model.ConversationSet;
+import org.thoughtcrime.securesms.googlevoice.GoogleVoiceInbox;
+import org.thoughtcrime.securesms.googlevoice.GoogleVoiceListRow;
 import org.thoughtcrime.securesms.util.CachedInflater;
 import org.signal.core.ui.util.ViewUtil;
 
@@ -42,6 +45,7 @@ class ConversationListAdapter extends ListAdapter<Conversation, RecyclerView.Vie
   private static final int TYPE_CLEAR_FILTER_EMPTY  = 7;
   private static final int TYPE_CHAT_FOLDER_EMPTY   = 8;
   private static final int TYPE_EMPTY_ARCHIVED      = 9;
+  private static final int TYPE_GOOGLE_VOICE        = 10;
 
   private enum Payload {
     TYPING_INDICATOR,
@@ -134,6 +138,10 @@ class ConversationListAdapter extends ListAdapter<Conversation, RecyclerView.Vie
       TextView title = v.findViewById(R.id.clear_filter_title);
       title.setText(R.string.ConversationListFragment__no_unread_chats);
       return new ClearFilterViewHolder(v, onClearFilterClicked);
+    } else if (viewType == TYPE_GOOGLE_VOICE) {
+      ComposeView view = new ComposeView(parent.getContext());
+      view.setLayoutParams(new RecyclerView.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+      return new GoogleVoiceViewHolder(view);
     } else if (viewType == TYPE_CHAT_FOLDER_EMPTY) {
       View v = LayoutInflater.from(parent.getContext()).inflate(R.layout.conversation_list_item_folder_empty, parent, false);
       return new EmptyFolderViewHolder(v, onFolderSettingsClicked);
@@ -194,6 +202,9 @@ class ConversationListAdapter extends ListAdapter<Conversation, RecyclerView.Vie
       Conversation          conversation = Objects.requireNonNull(getItem(position));
 
       casted.bind(conversation);
+    } else if (holder.getItemViewType() == TYPE_GOOGLE_VOICE) {
+      Conversation conversation = Objects.requireNonNull(getItem(position));
+      GoogleVoiceListRow.bind((ComposeView) holder.itemView, GoogleVoiceInbox.INSTANCE.find(conversation.getThreadRecord().getThreadId()));
     }
   }
 
@@ -263,8 +274,17 @@ class ConversationListAdapter extends ListAdapter<Conversation, RecyclerView.Vie
         return TYPE_EMPTY_ARCHIVED;
       case EMPTY:
         return TYPE_EMPTY;
+      case GOOGLE_VOICE:
+        return TYPE_GOOGLE_VOICE;
       default:
         throw new IllegalArgumentException();
+    }
+  }
+
+  /** AllIn: a Google Voice thread row; see GoogleVoiceListRow. Not swipeable or selectable. */
+  static final class GoogleVoiceViewHolder extends RecyclerView.ViewHolder {
+    GoogleVoiceViewHolder(@NonNull View itemView) {
+      super(itemView);
     }
   }
 

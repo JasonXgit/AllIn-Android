@@ -48,5 +48,7 @@ public class Conversation {
     CHAT_FOLDER_EMPTY,
     ARCHIVED_EMPTY,
     EMPTY,
+    /** AllIn: a Google Voice thread, see GoogleVoiceInbox. */
+    GOOGLE_VOICE,
   }
 }

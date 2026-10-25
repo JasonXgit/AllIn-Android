@@ -1829,6 +1829,7 @@ public class ConversationListFragment extends MainFragment implements Conversati
           viewHolder instanceof ConversationListAdapter.HeaderViewHolder ||
           viewHolder instanceof ClearFilterViewHolder ||
           viewHolder instanceof ConversationListAdapter.EmptyFolderViewHolder ||
+          viewHolder instanceof ConversationListAdapter.GoogleVoiceViewHolder ||
           mainToolbarViewModel.isInActionMode() ||
           viewHolder.itemView.isSelected() ||
           activeAdapter == searchAdapter)

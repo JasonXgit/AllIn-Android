@@ -1119,6 +1119,16 @@ class ThreadTable(context: Context, databaseHelper: SignalDatabase) : DatabaseTa
     return readableDatabase.rawQuery(query, null)
   }
 
+  /** AllIn: how many unpinned chats in the main list are newer than [date], to place a Google Voice thread among them. */
+  fun getUnpinnedConversationCountNewerThan(date: Long): Int {
+    return readableDatabase
+      .select("COUNT(*)")
+      .from(TABLE_NAME)
+      .where("$ACTIVE = 1 AND $ARCHIVED = 0 AND $PINNED_ORDER IS NULL AND $MEANINGFUL_MESSAGES != 0 AND $DATE > ?", date)
+      .run()
+      .use { cursor -> if (cursor.moveToFirst()) cursor.getInt(0) else 0 }
+  }
+
   fun getArchivedConversationListCount(conversationFilter: ConversationFilter): Int {
     val filterQuery = conversationFilter.toQuery()
     return readableDatabase

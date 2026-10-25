@@ -23,6 +23,7 @@ import org.thoughtcrime.securesms.database.model.MessageRecord;
 import org.thoughtcrime.securesms.database.model.ThreadWithRecipient;
 import org.thoughtcrime.securesms.database.model.UpdateDescription;
 import org.thoughtcrime.securesms.dependencies.AppDependencies;
+import org.thoughtcrime.securesms.googlevoice.GoogleVoiceInbox;
 import org.thoughtcrime.securesms.recipients.Recipient;
 import org.thoughtcrime.securesms.recipients.RecipientIds;
 import org.thoughtcrime.securesms.util.RemoteConfig;
@@ -179,6 +180,10 @@ abstract class ConversationListDataSource implements PagedDataSource<Long, Conve
     private int archivedCount;
     private int unpinnedCount;
 
+    /** AllIn: Google Voice rows merged into the unpinned chats, and their positions in the combined list (ascending). */
+    private List<Conversation> googleVoiceRows      = Collections.emptyList();
+    private List<Integer>      googleVoicePositions = Collections.emptyList();
+
     UnarchivedConversationListDataSource(@NonNull ChatFolderRecord chatFolder, @NonNull ConversationFilter conversationFilter, boolean showConversationFooterTip) {
       super(chatFolder, conversationFilter, showConversationFooterTip);
     }
@@ -204,7 +209,69 @@ abstract class ConversationListDataSource implements PagedDataSource<Long, Conve
         }
       }
 
-      return totalCount;
+      computeGoogleVoiceRows();
+
+      return totalCount + googleVoiceRows.size();
+    }
+
+    /**
+     * AllIn: places each Google Voice thread among the unpinned chats by date. Only in the main "All chats" list with
+     * no filter, where the order is purely by date. A thread's position is where the unpinned chats start, plus the
+     * Signal chats newer than it, plus the Google Voice threads newer than it.
+     */
+    private void computeGoogleVoiceRows() {
+      List<GoogleVoiceInbox.ThreadSummary> threads = GoogleVoiceInbox.INSTANCE.threads();
+
+      if (threads.isEmpty() || conversationFilter != ConversationFilter.OFF || chatFolder.getFolderType() != ChatFolderRecord.FolderType.ALL) {
+        googleVoiceRows      = Collections.emptyList();
+        googleVoicePositions = Collections.emptyList();
+        return;
+      }
+
+      int unpinnedStart = pinnedCount + getHeaderOffset();
+
+      List<Conversation> rows      = new ArrayList<>(threads.size());
+      List<Integer>      positions = new ArrayList<>(threads.size());
+      for (int i = 0; i < threads.size(); i++) {
+        GoogleVoiceInbox.ThreadSummary thread = threads.get(i);
+        rows.add(new Conversation(ConversationReader.buildGoogleVoiceRecord(thread.getListId(), thread.getDateMs(), thread.getUnread())));
+        positions.add(unpinnedStart + threadTable.getUnpinnedConversationCountNewerThan(thread.getDateMs()) + i);
+      }
+
+      googleVoiceRows      = rows;
+      googleVoicePositions = positions;
+    }
+
+    @Override
+    public @NonNull List<Conversation> load(int start, int length, int totalSize, @NonNull CancellationSignal cancellationSignal) {
+      if (googleVoicePositions.isEmpty()) {
+        return super.load(start, length, totalSize, cancellationSignal);
+      }
+
+      int end            = start + length;
+      int googleBefore   = 0;
+      int googleInWindow = 0;
+      for (int position : googleVoicePositions) {
+        if (position < start)    googleBefore++;
+        else if (position < end) googleInWindow++;
+      }
+
+      int                signalLength = length - googleInWindow;
+      List<Conversation> signalRows   = signalLength > 0 ? super.load(start - googleBefore, signalLength, totalSize, cancellationSignal)
+                                                         : Collections.emptyList();
+
+      List<Conversation> merged      = new ArrayList<>(length);
+      int                signalIndex = 0;
+      for (int position = start; position < end; position++) {
+        int googleIndex = googleVoicePositions.indexOf(position);
+        if (googleIndex >= 0) {
+          merged.add(googleVoiceRows.get(googleIndex));
+        } else if (signalIndex < signalRows.size()) {
+          merged.add(signalRows.get(signalIndex++));
+        }
+      }
+
+      return merged;
     }
 
     @Override

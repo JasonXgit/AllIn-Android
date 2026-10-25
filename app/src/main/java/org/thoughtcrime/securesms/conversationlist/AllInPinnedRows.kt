@@ -23,8 +23,11 @@ import androidx.compose.ui.platform.ComposeView
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleOwner
 import androidx.lifecycle.lifecycleScope
+import androidx.lifecycle.repeatOnLifecycle
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -36,19 +39,24 @@ import org.thoughtcrime.securesms.R
 import org.thoughtcrime.securesms.fantasy.EspnApi
 import org.thoughtcrime.securesms.fantasy.EspnException
 import org.thoughtcrime.securesms.fantasy.FantasyFootballActivity
+import org.thoughtcrime.securesms.googlevoice.GoogleVoiceInbox
 import org.thoughtcrime.securesms.keyvalue.SignalStore
 import java.util.Locale
 
 /**
- * AllIn: rows pinned above the chat list for AllIn's own features (currently Fantasy Football).
+ * AllIn: rows pinned above the chat list for AllIn's own features (currently Fantasy Football), plus the refresh
+ * loop that keeps Google Voice threads in the list current.
  *
- * They live in a ComposeView above the list rather than inside its paged adapter, so Signal's swipe, selection and
- * paging code is untouched. [refresh] is called whenever the chat list resumes.
+ * The pinned rows live in a ComposeView above the list rather than inside its paged adapter, so Signal's swipe,
+ * selection and paging code is untouched. [refresh] is called whenever the chat list resumes.
  */
 class AllInPinnedRows(private val view: ComposeView, private val owner: LifecycleOwner) {
 
   companion object {
     private val TAG = Log.tag(AllInPinnedRows::class.java)
+
+    /** How often Google Voice is re-checked while the chat list is on screen. */
+    private const val GOOGLE_VOICE_REFRESH_MS = 60_000L
   }
 
   private var fantasySummary by mutableStateOf<String?>(null)
@@ -60,6 +68,15 @@ class AllInPinnedRows(private val view: ComposeView, private val owner: Lifecycl
           summary = fantasySummary,
           onClick = { view.context.startActivity(FantasyFootballActivity.createIntent(view.context)) }
         )
+      }
+    }
+
+    owner.lifecycleScope.launch {
+      owner.repeatOnLifecycle(Lifecycle.State.RESUMED) {
+        while (true) {
+          withContext(Dispatchers.IO) { GoogleVoiceInbox.refresh() }
+          delay(GOOGLE_VOICE_REFRESH_MS)
+        }
       }
     }
   }

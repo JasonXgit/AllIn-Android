@@ -60,6 +60,17 @@ public class ConversationReader extends ThreadTable.StaticReader {
     return buildThreadRecordForType(type, count, showTip);
   }
 
+  /** AllIn: a placeholder record for a Google Voice thread; the row itself is drawn from GoogleVoiceInbox. */
+  public static ThreadWithRecipient buildGoogleVoiceRecord(long listId, long dateMs, boolean unread) {
+    return new ThreadWithRecipient.Builder(listId)
+        .setBody(Conversation.Type.GOOGLE_VOICE.toString())
+        .setDate(dateMs)
+        .setRecipient(Recipient.UNKNOWN)
+        .setUnreadCount(unread ? 1 : 0)
+        .setType(TYPE_NONE)
+        .build();
+  }
+
   public static ThreadWithRecipient buildThreadRecordForType(@NonNull Conversation.Type type, int count, boolean showTip) {
     return new ThreadWithRecipient.Builder(-(100 + type.ordinal()))
         .setBody(type.toString())
