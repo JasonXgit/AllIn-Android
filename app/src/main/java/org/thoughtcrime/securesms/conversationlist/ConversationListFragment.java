@@ -216,6 +216,7 @@ public class ConversationListFragment extends MainFragment implements Conversati
   private View                                   searchLoading;
   private boolean                                searchInProgress;
   private Stub<ComposeView>                      bannerView;
+  private AllInPinnedRows                        allInPinnedRows;
   private ConversationListFilterPullView         pullView;
   private AppBarLayout                           pullViewAppBarLayout;
   private ConversationListViewModel              viewModel;
@@ -326,6 +327,7 @@ public class ConversationListFragment extends MainFragment implements Conversati
     searchLoading           = view.findViewById(R.id.search_loading);
     bottomActionBar         = view.findViewById(R.id.conversation_list_bottom_action_bar);
     bannerView              = new Stub<>(view.findViewById(R.id.banner_compose_view));
+    allInPinnedRows         = new AllInPinnedRows(view.findViewById(R.id.allin_pinned_rows), getViewLifecycleOwner());
     voiceNotePlayerViewStub = new Stub<>(view.findViewById(R.id.voice_note_player));
     pullView                = view.findViewById(R.id.pull_view);
     pullViewAppBarLayout    = view.findViewById(R.id.recycler_coordinator_app_bar);
@@ -548,6 +550,7 @@ public class ConversationListFragment extends MainFragment implements Conversati
   public void onResume() {
     super.onResume();
 
+    allInPinnedRows.refresh(isArchived());
     initializeSearchListener();
     initializeFilterListener();
     SpoilerAnnotation.resetRevealedSpoilers();

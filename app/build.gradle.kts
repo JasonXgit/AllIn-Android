@@ -45,6 +45,11 @@ val debugKeystorePropertiesProvider: Provider<Properties> = providers.of(Propert
   parameters.file.set(rootProject.layout.projectDirectory.file("keystore.debug.properties"))
 }
 
+// AllIn: release signing key, kept outside the repo (path relative to the project root).
+val allinKeystorePropertiesProvider: Provider<Properties> = providers.of(PropertiesFileValueSource::class.java) {
+  parameters.file.set(rootProject.layout.projectDirectory.file(project.property("allinKeystoreProperties") as String))
+}
+
 val languagesProvider: Provider<List<String>> = providers.of(LanguageListValueSource::class.java) {
   parameters.resDir.set(layout.projectDirectory.dir("src/main/res"))
 }
@@ -175,6 +180,15 @@ android {
     }
   }
 
+  allinKeystorePropertiesProvider.get().takeIf { it.isNotEmpty() }?.let { properties ->
+    signingConfigs.create("allinRelease") {
+      storeFile = file(properties.getProperty("storeFile"))
+      storePassword = properties.getProperty("storePassword")
+      keyAlias = properties.getProperty("keyAlias")
+      keyPassword = properties.getProperty("keyPassword")
+    }
+  }
+
   testOptions {
     execution = "ANDROIDX_TEST_ORCHESTRATOR"
 
@@ -240,14 +254,22 @@ android {
     buildConfig = true
     viewBinding = true
     compose = true
+    resValues = true
   }
 
   defaultConfig {
     if (currentHotfixVersion >= maxHotfixVersions) {
       throw AssertionError("Hotfix version offset is too large!")
     }
-    versionCode = (canonicalVersionCode * maxHotfixVersions) + possibleHotfixVersions[currentHotfixVersion]
-    versionName = canonicalVersionName
+    // AllIn: two extra digits for AllIn's own releases on top of Signal's version code, so both Signal updates
+    // and AllIn releases always increase it (the updater only installs a higher version code).
+    val allinRevision = (project.property("allinRevision") as String).toInt()
+    require(allinRevision in 0..99) { "allinRevision must be 0-99" }
+    versionCode = ((canonicalVersionCode * maxHotfixVersions) + possibleHotfixVersions[currentHotfixVersion]) * 100 + allinRevision
+    versionName = "$canonicalVersionName-allin.$allinRevision"
+
+    applicationId = project.property("allinApplicationId") as String
+    resValue("string", "app_name", project.property("allinAppName") as String)
 
     if (isInstrumentationTestRun) {
       applicationIdSuffix = ".test_run"
@@ -374,6 +396,7 @@ android {
     getByName("release") {
       isMinifyEnabled = true
       proguardFiles(*buildTypes["debug"].proguardFiles.toTypedArray())
+      signingConfigs.findByName("allinRelease")?.let { signingConfig = it }
       buildConfigField("String", "BUILD_VARIANT_TYPE", "\"Release\"")
     }
 
@@ -452,7 +475,7 @@ android {
     create("website") {
       dimension = "distribution"
       buildConfigField("boolean", "MANAGES_APP_UPDATES", "true")
-      buildConfigField("String", "APK_UPDATE_MANIFEST_URL", "\"https://updates.signal.org/android/latest.json\"")
+      buildConfigField("String", "APK_UPDATE_MANIFEST_URL", "\"${project.property("allinUpdateManifestUrl")}\"")
       buildConfigField("String", "BUILD_DISTRIBUTION_TYPE", "\"website\"")
     }
 
@@ -558,6 +581,7 @@ androidComponents {
       .toTransformMany(SingleArtifact.APK)
     renameTask.configure {
       transformationRequest.set(renameRequest)
+      appName.set(project.property("allinAppName") as String)
     }
 
     // Include the test-only library on non-release builds.
@@ -1184,15 +1208,19 @@ abstract class RenameApkTask : DefaultTask() {
   @get:Internal
   abstract val transformationRequest: Property<ArtifactTransformationRequest<RenameApkTask>>
 
+  @get:Input
+  abstract val appName: Property<String>
+
   @TaskAction
   fun rename() {
     transformationRequest.get().submit(this) { artifact ->
       val originalFile = File(artifact.outputFile)
       val versionName = artifact.versionName?.substringBefore(" |")
+      val baseName = originalFile.name.replaceFirst("Signal-Android", appName.get())
       val newName = if (!versionName.isNullOrEmpty()) {
-        originalFile.name.replace(".apk", "-$versionName.apk")
+        baseName.replace(".apk", "-$versionName.apk")
       } else {
-        originalFile.name
+        baseName
       }
       val newFile = File(outFolder.get().asFile, newName)
       originalFile.copyTo(newFile, overwrite = true)

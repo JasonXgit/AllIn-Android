@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- AllIn: debug builds only. Lets adb open the Google Voice sign-in test without registering the app. -->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
+
+    <application>
+        <activity
+            android:name="org.thoughtcrime.securesms.googlevoice.GoogleVoiceSignInActivity"
+            android:exported="true"
+            tools:replace="android:exported" />
+
+        <activity
+            android:name="org.thoughtcrime.securesms.googlevoice.GoogleVoiceSettingsActivity"
+            android:exported="true"
+            tools:replace="android:exported" />
+
+        <activity
+            android:name="org.thoughtcrime.securesms.fantasy.FantasySettingsActivity"
+            android:exported="true"
+            tools:replace="android:exported" />
+
+        <activity
+            android:name="org.thoughtcrime.securesms.fantasy.FantasyFootballActivity"
+            android:exported="true"
+            tools:replace="android:exported" />
+    </application>
+</manifest>

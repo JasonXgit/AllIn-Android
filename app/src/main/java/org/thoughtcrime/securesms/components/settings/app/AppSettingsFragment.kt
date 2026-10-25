@@ -75,6 +75,8 @@ import org.thoughtcrime.securesms.components.settings.app.subscription.BadgeImag
 import org.thoughtcrime.securesms.components.settings.app.subscription.InAppPaymentsRepository
 import org.thoughtcrime.securesms.components.settings.app.subscription.completed.InAppPaymentsBottomSheetDelegate
 import org.thoughtcrime.securesms.database.model.InAppPaymentSubscriberRecord
+import org.thoughtcrime.securesms.fantasy.FantasySettingsActivity
+import org.thoughtcrime.securesms.googlevoice.GoogleVoiceSettingsActivity
 import org.thoughtcrime.securesms.keyvalue.SignalStore
 import org.thoughtcrime.securesms.profiles.ProfileName
 import org.thoughtcrime.securesms.recipients.Recipient
@@ -498,6 +500,29 @@ private fun AppSettingsContent(
 
         item {
           Dividers.Default()
+        }
+
+        item {
+          val context = LocalContext.current
+          Rows.TextRow(
+            text = "Google Voice",
+            icon = painterResource(R.drawable.symbol_phone_plus_24),
+            onClick = {
+              context.startActivity(GoogleVoiceSettingsActivity.createIntent(context))
+            }
+          )
+        }
+
+        item {
+          val context = LocalContext.current
+          Rows.TextRow(
+            text = "Fantasy Football",
+            icon = painterResource(R.drawable.ic_avatar_football),
+            iconModifier = Modifier.size(24.dp),
+            onClick = {
+              context.startActivity(FantasySettingsActivity.createIntent(context))
+            }
+          )
         }
 
         item {

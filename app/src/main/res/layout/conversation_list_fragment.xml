@@ -37,12 +37,20 @@
         android:layout="@layout/conversation_list_banner_view"
         app:layout_constraintTop_toBottomOf="@id/voice_note_player" />
 
+    <!-- AllIn: pinned extras (e.g. Fantasy Football) shown above the chat list when enabled. -->
+    <androidx.compose.ui.platform.ComposeView
+        android:id="@+id/allin_pinned_rows"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:visibility="gone"
+        app:layout_constraintTop_toBottomOf="@id/banner_compose_view" />
+
     <androidx.constraintlayout.widget.Barrier
         android:id="@+id/banner_barrier"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         app:barrierDirection="bottom"
-        app:constraint_referenced_ids="voice_note_player,banner_compose_view" />
+        app:constraint_referenced_ids="voice_note_player,banner_compose_view,allin_pinned_rows" />
 
     <androidx.coordinatorlayout.widget.CoordinatorLayout
         android:layout_width="match_parent"
