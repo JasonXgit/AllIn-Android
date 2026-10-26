@@ -28,5 +28,6 @@ class GoogleVoiceSignInActivity : WebSignInActivity() {
 
   override fun onSignedIn() {
     SignalStore.googleVoice.signedIn = true
+    GoogleVoiceMonitor.update()
   }
 }

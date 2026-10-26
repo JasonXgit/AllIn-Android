@@ -35,5 +35,6 @@ object GoogleVoiceSession {
     cookies.flush()
     WebStorage.getInstance().deleteOrigin("https://voice.google.com")
     SignalStore.googleVoice.signedIn = false
+    GoogleVoiceMonitor.update()
   }
 }

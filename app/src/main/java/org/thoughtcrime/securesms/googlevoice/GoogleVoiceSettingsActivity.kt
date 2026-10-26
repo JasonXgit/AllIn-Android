@@ -11,8 +11,11 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.lifecycleScope
+import androidx.lifecycle.repeatOnLifecycle
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.signal.core.ui.compose.DayNightPreviews
@@ -46,6 +49,8 @@ class GoogleVoiceSettingsActivity : BaseActivity() {
   private var enabled by mutableStateOf(false)
   private var signedIn by mutableStateOf(false)
   private var connectionStatus by mutableStateOf<String?>(null)
+  private var notifications by mutableStateOf(true)
+  private var liveStatus by mutableStateOf(GoogleVoiceMonitor.status)
 
   override fun onCreate(savedInstanceState: Bundle?) {
     theme.onCreate(this)
@@ -57,12 +62,19 @@ class GoogleVoiceSettingsActivity : BaseActivity() {
           enabled = enabled,
           signedIn = signedIn,
           connectionStatus = connectionStatus,
+          notifications = notifications,
+          liveStatus = liveStatus,
           onEnabledChanged = {
             SignalStore.googleVoice.enabled = it
             enabled = it
+            GoogleVoiceMonitor.update()
             if (it && signedIn) {
               checkConnection()
             }
+          },
+          onNotificationsChanged = {
+            SignalStore.googleVoice.notificationsEnabled = it
+            notifications = it
           },
           onSignInClick = { startActivity(GoogleVoiceSignInActivity.createIntent(this)) },
           onSignOutClick = {
@@ -73,6 +85,16 @@ class GoogleVoiceSettingsActivity : BaseActivity() {
         )
       }
     }
+
+    lifecycleScope.launch {
+      // The live connection takes a few seconds to come up; keep the status line current while on screen.
+      repeatOnLifecycle(Lifecycle.State.RESUMED) {
+        while (true) {
+          liveStatus = GoogleVoiceMonitor.status
+          delay(2_000)
+        }
+      }
+    }
   }
 
   override fun onResume() {
@@ -80,6 +102,7 @@ class GoogleVoiceSettingsActivity : BaseActivity() {
     theme.onResume(this)
     enabled = SignalStore.googleVoice.enabled
     signedIn = SignalStore.googleVoice.signedIn && GoogleVoiceSession.hasSession()
+    notifications = SignalStore.googleVoice.notificationsEnabled
     if (enabled && signedIn) {
       checkConnection()
     }
@@ -111,7 +134,10 @@ private fun GoogleVoiceSettingsScreen(
   enabled: Boolean,
   signedIn: Boolean,
   connectionStatus: String?,
+  notifications: Boolean,
+  liveStatus: String,
   onEnabledChanged: (Boolean) -> Unit,
+  onNotificationsChanged: (Boolean) -> Unit,
   onSignInClick: () -> Unit,
   onSignOutClick: () -> Unit,
   onNavigationClick: () -> Unit
@@ -150,6 +176,17 @@ private fun GoogleVoiceSettingsScreen(
             )
           }
         }
+
+        if (signedIn) {
+          item {
+            Rows.ToggleRow(
+              checked = notifications,
+              text = "Notifications",
+              label = liveStatus,
+              onCheckChanged = onNotificationsChanged
+            )
+          }
+        }
       }
     }
   }
@@ -163,7 +200,10 @@ private fun GoogleVoiceSettingsScreenPreview() {
       enabled = true,
       signedIn = false,
       connectionStatus = null,
+      notifications = true,
+      liveStatus = "Live: new texts arrive right away",
       onEnabledChanged = {},
+      onNotificationsChanged = {},
       onSignInClick = {},
       onSignOutClick = {},
       onNavigationClick = {}

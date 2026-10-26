@@ -150,6 +150,13 @@ class GoogleVoiceConversationActivity : BaseActivity() {
   override fun onResume() {
     super.onResume()
     theme.onResume(this)
+    GoogleVoiceNotifications.openThreadId = threadId
+    GoogleVoiceNotifications.cancel(threadId)
+  }
+
+  override fun onPause() {
+    GoogleVoiceNotifications.openThreadId = null
+    super.onPause()
   }
 
   override fun onDestroy() {

@@ -3,10 +3,12 @@ package org.thoughtcrime.securesms.googlevoice
 import android.util.Base64
 import android.webkit.CookieManager
 import androidx.annotation.WorkerThread
+import okhttp3.FormBody
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
+import okhttp3.Response
 import org.json.JSONArray
 import org.json.JSONObject
 import org.signal.core.util.logging.Log
@@ -48,6 +50,12 @@ object GoogleVoiceApi {
   /** ReqSendSMS.Media.Type.JPEG */
   private const val MEDIA_TYPE_JPEG = 1
 
+  private const val REALTIME_BASE = "https://signaler-pa.clients6.google.com"
+  private const val REALTIME_CHOOSE_SERVER = "[[null,null,null,[7,5],null,[null,[null,1],[[[\"3\"]]]]]]"
+
+  /** The event sources the web app subscribes to, each with its kind (from mautrix-gvoice's channel.go). */
+  private val REALTIME_SOURCES = listOf("1" to "2", "2" to "3", "3" to "3", "4" to "1", "5" to "1", "6" to "1", "9" to "1")
+
   private const val CONTENT_TYPE_PBLITE = "application/json+protobuf"
   private const val CONTENT_TYPE_PROTOBUF = "application/x-protobuf"
 
@@ -57,6 +65,11 @@ object GoogleVoiceApi {
       .connectTimeout(30, TimeUnit.SECONDS)
       .readTimeout(30, TimeUnit.SECONDS)
       .build()
+  }
+
+  /** Google holds realtime requests open for minutes, sending a keep-alive about every 30 seconds. */
+  private val longPollClient: OkHttpClient by lazy {
+    client.newBuilder().readTimeout(90, TimeUnit.SECONDS).build()
   }
 
   /**
@@ -158,12 +171,89 @@ object GoogleVoiceApi {
     }
   }
 
-  /** Sends [body] as a POST, or a GET when it's null. */
-  private fun execute(endpoint: String, body: PbLite?, configure: Request.Builder.() -> Unit): ByteArray {
+  // Realtime channel ("WebChannel" long polling), used by GoogleVoiceMonitor to hear about new messages right away.
+
+  /** Asks Google which realtime server to use; returns its session ID ("gsessionid"). */
+  @WorkerThread
+  @Throws(GoogleVoiceException::class)
+  fun chooseRealtimeServer(): String {
+    val json = String(
+      execute("realtime/chooseServer", PbLite(REALTIME_CHOOSE_SERVER)) {
+        url("$REALTIME_BASE/punctual/v1/chooseServer?key=$API_KEY")
+      }
+    )
+    try {
+      return JSONArray(json).getString(0)
+    } catch (e: Exception) {
+      throw GoogleVoiceException.Failed("Unexpected chooseServer response", e)
+    }
+  }
+
+  /** Opens a realtime channel subscribed to the web app's event sources; returns the channel's ID ("SID"). */
+  @WorkerThread
+  @Throws(GoogleVoiceException::class)
+  fun createRealtimeChannel(gSessionId: String): String {
+    val form = FormBody.Builder().add("count", REALTIME_SOURCES.size.toString()).add("ofs", "0")
+    REALTIME_SOURCES.forEachIndexed { i, (source, kind) ->
+      form.add("req${i}___data__", "[[[\"$source\",[null,null,null,[7,5],null,[null,[null,1],[[[\"$kind\"]]]],null,1,2],null,3]]]")
+    }
+    val request = signedInRequest()
+      .url("$REALTIME_BASE/punctual/multi-watch/channel?VER=8&gsessionid=$gSessionId&RID=${Random.nextInt(100_000)}&CVER=22&t=1&key=$API_KEY")
+      .header("X-WebChannel-Content-Type", CONTENT_TYPE_PBLITE)
+      .post(form.build())
+      .build()
+
+    val body = call("realtime/create", request) { it.body.string() }
+    try {
+      // "<length>\n[[0,["c","<SID>","",8,12,30000]]]"
+      return JSONArray(body.substringAfter('\n')).getJSONArray(0).getJSONArray(1).getString(1)
+    } catch (e: Exception) {
+      throw GoogleVoiceException.Failed("Unexpected channel response", e)
+    }
+  }
+
+  /**
+   * Long-polls the channel. Google holds the request open and streams length-prefixed JSON chunks as events happen;
+   * [onChunk] gets each one. Returns when Google ends the response (normally every few minutes).
+   */
+  @WorkerThread
+  @Throws(GoogleVoiceException::class)
+  fun pollRealtimeChannel(gSessionId: String, channelId: String, ackId: Long, onChunk: (String) -> Unit) {
+    val request = signedInRequest()
+      .url("$REALTIME_BASE/punctual/multi-watch/channel?VER=8&gsessionid=$gSessionId&RID=rpc&SID=$channelId&AID=$ackId&CI=0&TYPE=xmlhttp&t=1&key=$API_KEY")
+      .get()
+      .build()
+
+    call("realtime/poll", request, longPollClient) { response ->
+      // Lengths count UTF-16 code units, which is what a Java char is.
+      val reader = response.body.charStream().buffered()
+      while (true) {
+        val length = StringBuilder()
+        while (true) {
+          val c = reader.read()
+          if (c == -1) return@call
+          if (c == '\n'.code) break
+          length.append(c.toChar())
+        }
+        val count = length.toString().trim().toIntOrNull() ?: throw GoogleVoiceException.Failed("Bad realtime chunk")
+        val chunk = CharArray(count)
+        var read = 0
+        while (read < count) {
+          val n = reader.read(chunk, read, count - read)
+          if (n == -1) return@call
+          read += n
+        }
+        onChunk(String(chunk))
+      }
+    }
+  }
+
+  /** A request with the cookies and headers every signed-in call needs. */
+  private fun signedInRequest(): Request.Builder {
     val cookies = CookieManager.getInstance().getCookie(API_BASE) ?: throw GoogleVoiceException.NotSignedIn()
     val sapisid = WebSignInActivity.cookie(API_BASE, "SAPISID") ?: throw GoogleVoiceException.NotSignedIn()
 
-    val request = Request.Builder()
+    return Request.Builder()
       .header("Cookie", cookies)
       .header("Authorization", sapisidHash(sapisid))
       .header("User-Agent", WebSignInActivity.chromeUserAgent(AppDependencies.application))
@@ -175,29 +265,41 @@ object GoogleVoiceApi {
       .header("Sec-Fetch-Site", "same-site")
       .header("Sec-Fetch-Mode", "cors")
       .header("Sec-Fetch-Dest", "empty")
+  }
+
+  /** Sends [body] as a POST, or a GET when it's null. */
+  private fun execute(endpoint: String, body: PbLite?, configure: Request.Builder.() -> Unit): ByteArray {
+    val request = signedInRequest()
       .apply(configure)
       .apply { if (body != null) post(body.json.toRequestBody(CONTENT_TYPE_PBLITE.toMediaType())) }
       .build()
 
+    return call(endpoint, request) { response ->
+      val bytes = response.body.bytes()
+      val safetyType = response.header("X-Goog-Safety-Content-Type")
+      if (safetyType?.startsWith(CONTENT_TYPE_PROTOBUF) == true && response.header("Content-Type")?.startsWith("text/plain") == true) {
+        Base64.decode(bytes, Base64.DEFAULT)
+      } else {
+        bytes
+      }
+    }
+  }
+
+  /** Runs [request], turning auth failures, error codes and network errors into [GoogleVoiceException]s. */
+  private fun <T> call(endpoint: String, request: Request, httpClient: OkHttpClient = client, read: (Response) -> T): T {
     try {
-      client.newCall(request).execute().use { response ->
+      httpClient.newCall(request).execute().use { response ->
         if (response.code == 401 || response.code == 403) {
           Log.w(TAG, "[$endpoint] Rejected with ${response.code}, session expired.")
           throw GoogleVoiceException.NotSignedIn()
         }
         if (!response.isSuccessful) {
           // Google's error body names the bad field; it holds no account data.
-          Log.w(TAG, "[$endpoint] ${response.code}: ${response.body.string().take(500)}")
-          throw GoogleVoiceException.Failed("$endpoint returned ${response.code}")
+          val error = response.body.string().take(500)
+          Log.w(TAG, "[$endpoint] ${response.code}: $error")
+          throw GoogleVoiceException.Failed("$endpoint returned ${response.code}", httpCode = response.code, body = error)
         }
-
-        val bytes = response.body.bytes()
-        val safetyType = response.header("X-Goog-Safety-Content-Type")
-        return if (safetyType?.startsWith(CONTENT_TYPE_PROTOBUF) == true && response.header("Content-Type")?.startsWith("text/plain") == true) {
-          Base64.decode(bytes, Base64.DEFAULT)
-        } else {
-          bytes
-        }
+        return read(response)
       }
     } catch (e: IOException) {
       throw GoogleVoiceException.Failed("$endpoint failed: ${e.javaClass.simpleName}", e)
@@ -233,5 +335,5 @@ object GoogleVoiceApi {
 
 sealed class GoogleVoiceException(message: String, cause: Throwable? = null) : Exception(message, cause) {
   class NotSignedIn : GoogleVoiceException("Not signed in to Google Voice")
-  class Failed(message: String, cause: Throwable? = null) : GoogleVoiceException(message, cause)
+  class Failed(message: String, cause: Throwable? = null, val httpCode: Int = 0, val body: String = "") : GoogleVoiceException(message, cause)
 }

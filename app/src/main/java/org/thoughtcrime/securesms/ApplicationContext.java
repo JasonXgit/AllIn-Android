@@ -65,6 +65,7 @@ import org.thoughtcrime.securesms.database.LogDatabase;
 import org.thoughtcrime.securesms.database.SignalDatabase;
 import org.thoughtcrime.securesms.database.SqlCipherLibraryLoader;
 import org.thoughtcrime.securesms.dependencies.AppDependencies;
+import org.thoughtcrime.securesms.googlevoice.GoogleVoiceMonitor;
 import org.thoughtcrime.securesms.dependencies.ApplicationDependencyProvider;
 import org.signal.emoji.EmojiSource;
 import org.signal.emoji.JumboEmoji;
@@ -223,6 +224,7 @@ public class ApplicationContext extends Application implements AppForegroundObse
               .addNonBlocking(this::initializePendingRetryReceiptManager)
               .addNonBlocking(this::initializeScheduledMessageManager)
               .addNonBlocking(this::initializeFcmCheck)
+              .addNonBlocking(GoogleVoiceMonitor::update)
               .addNonBlocking(PreKeysSyncJob::enqueueIfNeeded)
               .addNonBlocking(this::initializePeriodicTasks)
               .addNonBlocking(this::initializeCircumvention)

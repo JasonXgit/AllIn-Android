@@ -38,22 +38,25 @@ object GoogleVoiceInbox {
 
   fun find(listId: Long): ThreadSummary? = threads.firstOrNull { it.listId == listId }
 
-  /** Fetches the latest threads and redraws the chat list if anything changed. */
+  /** Fetches the latest threads and redraws the chat list if anything changed. Returns the threads, or null on failure. */
   @WorkerThread
-  fun refresh() {
+  fun refresh(): List<Thread>? {
     if (!isActive()) {
       update(emptyList())
-      return
+      return null
     }
 
-    try {
-      val summaries = GoogleVoiceApi.listThreads().threads
+    return try {
+      val threads = GoogleVoiceApi.listThreads().threads
+      val summaries = threads
         .filter { it.isText }
         .mapNotNull { it.toSummary() }
         .sortedByDescending { it.dateMs }
       update(summaries)
+      threads
     } catch (e: GoogleVoiceException) {
       Log.w(TAG, "Refresh failed", e)
+      null
     }
   }
 
