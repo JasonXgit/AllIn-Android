@@ -63,9 +63,11 @@ jobs:
       run: |
         keys="$(dirname "$GITHUB_WORKSPACE")/keys"   # matches allinKeystoreProperties=../keys/keystore.properties
         mkdir -p "$keys"
-        echo "$ALLIN_KEYSTORE_B64" | base64 -d > "$keys/allin-release.jks"
+        # Secrets set from Windows can carry line breaks; strip them.
+        printf '%s' "$ALLIN_KEYSTORE_B64" | tr -d '\r\n ' | base64 -d > "$keys/allin-release.jks"
+        password="$(printf '%s' "$ALLIN_KEYSTORE_PASSWORD" | tr -d '\r\n')"
         printf 'storeFile=%s\nstorePassword=%s\nkeyAlias=allin\nkeyPassword=%s\n' \
-          "$keys/allin-release.jks" "$ALLIN_KEYSTORE_PASSWORD" "$ALLIN_KEYSTORE_PASSWORD" > "$keys/keystore.properties"
+          "$keys/allin-release.jks" "$password" "$password" > "$keys/keystore.properties"
       env:
         ALLIN_KEYSTORE_B64: ${{ secrets.ALLIN_KEYSTORE_B64 }}
         ALLIN_KEYSTORE_PASSWORD: ${{ secrets.ALLIN_KEYSTORE_PASSWORD }}
