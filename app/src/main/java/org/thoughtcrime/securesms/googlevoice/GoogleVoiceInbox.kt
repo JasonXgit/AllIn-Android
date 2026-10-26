@@ -57,6 +57,11 @@ object GoogleVoiceInbox {
     }
   }
 
+  /** Shows [threadId] as read straight away, without waiting for the next refresh. */
+  fun markReadLocally(threadId: String) {
+    update(threads.map { if (it.threadId == threadId) it.copy(unread = false) else it })
+  }
+
   private fun update(newThreads: List<ThreadSummary>) {
     if (newThreads != threads) {
       threads = newThreads
@@ -66,12 +71,16 @@ object GoogleVoiceInbox {
 
   private fun Thread.toSummary(): ThreadSummary? {
     val latest = messages.maxByOrNull { it.timestamp } ?: return null
-    val names = contacts.map { contact -> contact.name.ifBlank { contact.phoneNumber } }.filter { it.isNotBlank() }
+    val names = if (contacts.isNotEmpty()) {
+      contacts.map { contact -> GoogleVoiceContacts.displayName(contact.phoneNumber, contact.name) }
+    } else {
+      phoneNumbers.map { GoogleVoiceContacts.displayName(it, null) }
+    }.filter { it.isNotBlank() }
 
     return ThreadSummary(
       listId = listIdFor(ID),
       threadId = ID,
-      name = names.joinToString(", ").ifBlank { phoneNumbers.firstOrNull() ?: "Google Voice" },
+      name = names.joinToString(", ").ifBlank { "Google Voice" },
       snippet = latest.snippet(),
       dateMs = latest.timestamp,
       unread = !read,

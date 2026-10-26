@@ -45,6 +45,9 @@ object GoogleVoiceApi {
   /** The voice.google.com web client build the protocol was captured from. */
   private const val CLIENT_VERSION = "665865172"
 
+  /** ReqSendSMS.Media.Type.JPEG */
+  private const val MEDIA_TYPE_JPEG = 1
+
   private const val CONTENT_TYPE_PBLITE = "application/json+protobuf"
   private const val CONTENT_TYPE_PROTOBUF = "application/x-protobuf"
 
@@ -76,14 +79,33 @@ object GoogleVoiceApi {
   }
 
   /**
-   * Sends a text into an existing conversation. [trackingData] is the BotGuard signature from [GoogleVoiceSigner];
-   * without one Google may silently drop or rate-limit the message.
+   * Sends a text, optionally with a JPEG [photo], into an existing conversation. [trackingData] is the BotGuard
+   * signature from [GoogleVoiceSigner]; without one Google may silently drop or rate-limit the message.
    */
   @WorkerThread
   @Throws(GoogleVoiceException::class)
-  fun sendSms(threadId: String, text: String, transactionId: Long, trackingData: String): RespSendSMS {
-    val body = pblite(null, null, null, null, text, threadId, null, null, pblite(transactionId), null, pblite(trackingData))
+  fun sendSms(threadId: String, text: String, transactionId: Long, trackingData: String, photo: ByteArray? = null): RespSendSMS {
+    val media = photo?.let { pblite(MEDIA_TYPE_JPEG, it) }
+    val body = pblite(null, null, null, null, text, threadId, null, null, pblite(transactionId), media, pblite(trackingData))
     return RespSendSMS.ADAPTER.decode(post("api2thread/sendsms", body))
+  }
+
+  /** Marks a conversation as read, here and in Google's own apps. */
+  @WorkerThread
+  @Throws(GoogleVoiceException::class)
+  fun markRead(threadId: String) {
+    // ReqUpdateAttributes: the thread's new attributes, then which attributes to change ("read"), then 1.
+    post("thread/updateattributes", pblite(pblite(threadId, null, null, true), pblite(null, null, null, true), 1))
+  }
+
+  /** Downloads a picture from an MMS message, at full size. */
+  @WorkerThread
+  @Throws(GoogleVoiceException::class)
+  fun downloadAttachment(attachmentId: String): ByteArray {
+    return execute("attachment", null) {
+      url("$ORIGIN/u/0/a/i/$attachmentId?s=1")
+      header("Sec-Fetch-Site", "same-origin")
+    }
   }
 
   /** A random ID like the web app's, small enough to survive a round trip through JavaScript numbers. */
@@ -136,7 +158,8 @@ object GoogleVoiceApi {
     }
   }
 
-  private fun execute(endpoint: String, body: PbLite, configure: Request.Builder.() -> Unit): ByteArray {
+  /** Sends [body] as a POST, or a GET when it's null. */
+  private fun execute(endpoint: String, body: PbLite?, configure: Request.Builder.() -> Unit): ByteArray {
     val cookies = CookieManager.getInstance().getCookie(API_BASE) ?: throw GoogleVoiceException.NotSignedIn()
     val sapisid = WebSignInActivity.cookie(API_BASE, "SAPISID") ?: throw GoogleVoiceException.NotSignedIn()
 
@@ -153,7 +176,7 @@ object GoogleVoiceApi {
       .header("Sec-Fetch-Mode", "cors")
       .header("Sec-Fetch-Dest", "empty")
       .apply(configure)
-      .post(body.json.toRequestBody(CONTENT_TYPE_PBLITE.toMediaType()))
+      .apply { if (body != null) post(body.json.toRequestBody(CONTENT_TYPE_PBLITE.toMediaType())) }
       .build()
 
     try {
@@ -196,6 +219,7 @@ object GoogleVoiceApi {
           null -> "null"
           is PbLite -> field.json
           is String -> JSONObject.quote(field)
+          is ByteArray -> JSONObject.quote(Base64.encodeToString(field, Base64.NO_WRAP))
           is Int, is Long, is Boolean -> field.toString()
           else -> throw IllegalArgumentException("Unsupported pblite field: ${field.javaClass}")
         }

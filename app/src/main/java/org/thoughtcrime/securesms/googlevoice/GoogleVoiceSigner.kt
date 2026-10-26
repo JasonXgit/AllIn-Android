@@ -140,11 +140,11 @@ class GoogleVoiceSigner @MainThread constructor(context: Context) {
     }
     Log.i(TAG, "BotGuard program loaded")
 
-    // Like the web app, report a blank signature once per program.
-    val blank = run(null)
-    scope.launch(Dispatchers.IO) {
+    // Like the web app, report a blank signature once per program. Off the send path, so it doesn't slow sending.
+    scope.launch {
       try {
-        if (blank != null) GoogleVoiceApi.pingWaa(blank)
+        val blank = run(null) ?: return@launch
+        withContext(Dispatchers.IO) { GoogleVoiceApi.pingWaa(blank) }
       } catch (e: GoogleVoiceException) {
         Log.w(TAG, "Waa ping failed", e)
       }

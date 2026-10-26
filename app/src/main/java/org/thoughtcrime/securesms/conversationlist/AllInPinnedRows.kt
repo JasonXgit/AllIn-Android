@@ -56,7 +56,7 @@ class AllInPinnedRows(private val view: ComposeView, private val owner: Lifecycl
     private val TAG = Log.tag(AllInPinnedRows::class.java)
 
     /** How often Google Voice is re-checked while the chat list is on screen. */
-    private const val GOOGLE_VOICE_REFRESH_MS = 60_000L
+    private const val GOOGLE_VOICE_REFRESH_MS = 15_000L
   }
 
   private var fantasySummary by mutableStateOf<String?>(null)
