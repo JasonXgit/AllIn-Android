@@ -7,17 +7,20 @@ import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
+import org.json.JSONArray
 import org.json.JSONObject
 import org.signal.core.util.logging.Log
 import org.thoughtcrime.securesms.dependencies.AppDependencies
 import org.thoughtcrime.securesms.googlevoice.proto.RespGetThread
 import org.thoughtcrime.securesms.googlevoice.proto.RespListThreads
+import org.thoughtcrime.securesms.googlevoice.proto.RespSendSMS
 import org.thoughtcrime.securesms.googlevoice.proto.Thread
 import org.thoughtcrime.securesms.googlevoice.proto.ThreadFolder
 import org.thoughtcrime.securesms.websession.WebSignInActivity
 import java.io.IOException
 import java.security.MessageDigest
 import java.util.concurrent.TimeUnit
+import kotlin.random.Random
 
 /**
  * AllIn: client for the private web API that voice.google.com uses, authenticated with the WebView's Google cookies.
@@ -33,6 +36,11 @@ object GoogleVoiceApi {
   private const val ORIGIN = "https://voice.google.com"
   private const val API_BASE = "https://clients6.google.com/voice/v1/voiceclient"
   private const val API_KEY = "AIzaSyDTYc1N4xiODyrQYK0Kl6g_y279LjYkrBg"
+
+  /** Waa issues the BotGuard program whose signature Google requires on sent texts (see [GoogleVoiceSigner]). */
+  private const val WAA_BASE = "https://waa-pa.clients6.google.com/\$rpc/google.internal.waa.v1.Waa"
+  private const val WAA_API_KEY = "AIzaSyBGb5fGAyC-pRcRU6MUHb__b_vKha71HRE"
+  private const val WAA_REQUEST_KEY = "/JR8jsAkqotcKsEKhXic"
 
   /** The voice.google.com web client build the protocol was captured from. */
   private const val CLIENT_VERSION = "665865172"
@@ -67,27 +75,84 @@ object GoogleVoiceApi {
     return RespGetThread.ADAPTER.decode(post("api2thread/get", body)).thread
   }
 
+  /**
+   * Sends a text into an existing conversation. [trackingData] is the BotGuard signature from [GoogleVoiceSigner];
+   * without one Google may silently drop or rate-limit the message.
+   */
+  @WorkerThread
+  @Throws(GoogleVoiceException::class)
+  fun sendSms(threadId: String, text: String, transactionId: Long, trackingData: String): RespSendSMS {
+    val body = pblite(null, null, null, null, text, threadId, null, null, pblite(transactionId), null, pblite(trackingData))
+    return RespSendSMS.ADAPTER.decode(post("api2thread/sendsms", body))
+  }
+
+  /** A random ID like the web app's, small enough to survive a round trip through JavaScript numbers. */
+  fun newTransactionId(): Long = Random.nextLong(100_000_000_000_000)
+
+  data class Waa(val interpreterUrl: String, val program: String, val globalName: String)
+
+  /** Asks Google for a fresh BotGuard program and the script that runs it. Programs are good for about an hour. */
+  @WorkerThread
+  @Throws(GoogleVoiceException::class)
+  fun createWaa(): Waa {
+    val json = String(postWaa("Create", pblite(WAA_REQUEST_KEY)))
+    try {
+      // pblite: [[respID, null, [null, null, null, url], hash, program, globalName, ...]]
+      val waa = JSONArray(json).getJSONArray(0)
+      val url = waa.getJSONArray(2).getString(3)
+      return Waa(
+        interpreterUrl = if (url.startsWith("//")) "https:$url" else url,
+        program = waa.getString(4),
+        globalName = waa.getString(5)
+      )
+    } catch (e: Exception) {
+      throw GoogleVoiceException.Failed("Unexpected Waa response", e)
+    }
+  }
+
+  /** The web app reports one blank signature after loading a program; mirrors that so ours looks the same. */
+  @WorkerThread
+  @Throws(GoogleVoiceException::class)
+  fun pingWaa(signature: String) {
+    postWaa("Ping", pblite(WAA_REQUEST_KEY, signature, 72, Random.nextLong(2_000_000_000)))
+  }
+
   private fun post(endpoint: String, body: PbLite): ByteArray {
+    return execute(endpoint, body) {
+      url("$API_BASE/$endpoint?alt=proto&key=$API_KEY")
+      header("X-Requested-With", "XMLHttpRequest")
+      header("X-Client-Version", CLIENT_VERSION)
+      header("X-JavaScript-User-Agent", "google-api-javascript-client/1.1.0")
+      // Google only returns protobuf to cookie-authenticated requests base64-wrapped, which execute() unwraps.
+      header("X-Goog-Encode-Response-If-Executable", "base64")
+    }
+  }
+
+  private fun postWaa(method: String, body: PbLite): ByteArray {
+    return execute("waa/$method", body) {
+      url("$WAA_BASE/$method")
+      header("X-Goog-Api-Key", WAA_API_KEY)
+      header("X-User-Agent", "grpc-web-javascript/0.1")
+    }
+  }
+
+  private fun execute(endpoint: String, body: PbLite, configure: Request.Builder.() -> Unit): ByteArray {
     val cookies = CookieManager.getInstance().getCookie(API_BASE) ?: throw GoogleVoiceException.NotSignedIn()
     val sapisid = WebSignInActivity.cookie(API_BASE, "SAPISID") ?: throw GoogleVoiceException.NotSignedIn()
 
     val request = Request.Builder()
-      .url("$API_BASE/$endpoint?alt=proto&key=$API_KEY")
       .header("Cookie", cookies)
       .header("Authorization", sapisidHash(sapisid))
       .header("User-Agent", WebSignInActivity.chromeUserAgent(AppDependencies.application))
       .header("Origin", ORIGIN)
       .header("Referer", "$ORIGIN/")
       .header("X-Goog-AuthUser", "0")
-      .header("X-Requested-With", "XMLHttpRequest")
-      .header("X-Client-Version", CLIENT_VERSION)
-      .header("X-JavaScript-User-Agent", "google-api-javascript-client/1.1.0")
       // Google refuses cookie-authenticated requests that don't look like a browser's cross-site fetch ("Request unsafe
-      // for trusted domain"), and only returns protobuf to them base64-wrapped, which post() unwraps.
-      .header("X-Goog-Encode-Response-If-Executable", "base64")
+      // for trusted domain").
       .header("Sec-Fetch-Site", "same-site")
       .header("Sec-Fetch-Mode", "cors")
       .header("Sec-Fetch-Dest", "empty")
+      .apply(configure)
       .post(body.json.toRequestBody(CONTENT_TYPE_PBLITE.toMediaType()))
       .build()
 

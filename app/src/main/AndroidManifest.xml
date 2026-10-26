@@ -888,6 +888,7 @@
         <activity
             android:name=".googlevoice.GoogleVoiceConversationActivity"
             android:configChanges="touchscreen|keyboard|keyboardHidden|orientation|screenLayout|screenSize"
+            android:windowSoftInputMode="adjustResize"
             android:exported="false"
             android:theme="@style/Theme.Signal.DayNight.NoActionBar" />
 
