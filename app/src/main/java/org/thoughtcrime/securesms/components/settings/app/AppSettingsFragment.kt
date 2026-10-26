@@ -516,6 +516,17 @@ private fun AppSettingsContent(
         item {
           val context = LocalContext.current
           Rows.TextRow(
+            text = "Family (Find My Device)",
+            icon = painterResource(R.drawable.symbol_location_circle_24),
+            onClick = {
+              context.startActivity(org.thoughtcrime.securesms.allin.family.FamilySettingsActivity.createIntent(context))
+            }
+          )
+        }
+
+        item {
+          val context = LocalContext.current
+          Rows.TextRow(
             text = "Fantasy Football",
             icon = painterResource(R.drawable.ic_avatar_football),
             iconModifier = Modifier.size(24.dp),

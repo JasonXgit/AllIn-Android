@@ -165,6 +165,11 @@ object DataMessageProcessor {
       localMetrics?.onGv2Processed()
     }
 
+    // AllIn: Find My Device commands from the family bot are handled here and never stored or shown.
+    if (groupId == null && org.thoughtcrime.securesms.allin.family.Family.handleIncoming(context, senderRecipient, message.body)) {
+      return
+    }
+
     var insertResult: InsertResult? = null
     var messageId: MessageId? = null
     SignalTrace.beginSection("DataMessageProcessor#messageInsert")

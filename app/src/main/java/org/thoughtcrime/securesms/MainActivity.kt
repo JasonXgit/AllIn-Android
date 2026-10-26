@@ -704,6 +704,11 @@ class MainActivity :
 
     toolbarViewModel.refresh()
 
+    // AllIn: once AllIn is this phone's Signal app, offer to remove the real Signal app.
+    if (SignalStore.account.isRegistered && SignalStore.account.isPrimaryDevice) {
+      org.thoughtcrime.securesms.allin.MoveFromSignal.offerUninstall(this)
+    }
+
     if (SignalStore.misc.shouldShowLinkedDevicesReminder) {
       SignalStore.misc.shouldShowLinkedDevicesReminder = false
       RelinkDevicesReminderBottomSheetFragment.show(supportFragmentManager)

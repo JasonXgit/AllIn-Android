@@ -470,6 +470,21 @@ public class SignalServiceMessageSender {
   }
 
   /**
+   * AllIn: sends a data message to one recipient WITHOUT the sent-transcript copy to this account's other devices.
+   * Used for Family (Find My Device) control messages, which must not show up in any chat.
+   */
+  public SendMessageResult sendDataMessageWithoutSync(SignalServiceAddress recipient,
+                                                      @Nullable SealedSenderAccess sealedSenderAccess,
+                                                      SignalServiceDataMessage message)
+      throws UntrustedIdentityException, IOException, NoSessionException
+  {
+    Content         content         = createMessageContent(message);
+    EnvelopeContent envelopeContent = EnvelopeContent.encrypted(content, ContentHint.IMPLICIT, Optional.empty());
+
+    return sendMessage(recipient, sealedSenderAccess, message.getTimestamp(), envelopeContent, false, null, IndividualSendEvents.EMPTY, false, false);
+  }
+
+  /**
    * Sends content to a single recipient.
    */
   private SendMessageResult sendContent(SignalServiceAddress recipient,

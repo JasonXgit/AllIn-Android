@@ -34,6 +34,8 @@ import org.thoughtcrime.securesms.pin.PinRestoreActivity;
 import org.thoughtcrime.securesms.profiles.edit.CreateProfileActivity;
 import org.thoughtcrime.securesms.push.SignalServiceNetworkAccess;
 import org.thoughtcrime.securesms.recipients.Recipient;
+import org.thoughtcrime.securesms.allin.MoveFromSignal;
+import org.thoughtcrime.securesms.allin.MoveFromSignalActivity;
 import org.thoughtcrime.securesms.registration.ui.RegistrationIntents;
 import org.thoughtcrime.securesms.service.KeyCachingService;
 import org.thoughtcrime.securesms.util.AppStartup;
@@ -253,6 +255,10 @@ public abstract class PassphraseRequiredActivity extends BaseActivity implements
   }
 
   private Intent getPushRegistrationIntent() {
+    // AllIn: if the real Signal app is on this phone, first explain how to bring its chats over.
+    if (MoveFromSignal.shouldShowWizard(this)) {
+      return MoveFromSignalActivity.createIntent(this);
+    }
     return RegistrationIntents.newIntentForNewRegistration(this);
   }
 
