@@ -92,14 +92,17 @@ object GoogleVoiceApi {
   }
 
   /**
-   * Sends a text, optionally with a JPEG [photo], into an existing conversation. [trackingData] is the BotGuard
-   * signature from [GoogleVoiceSigner]; without one Google may silently drop or rate-limit the message.
+   * Sends a text, optionally with a JPEG [photo]. Into an existing conversation by [threadId]; or, like the web app,
+   * a new conversation is created by leaving [threadId] empty and listing the [recipients] (E.164 numbers).
+   * [trackingData] is the BotGuard signature from [GoogleVoiceSigner]; without one Google may silently drop or
+   * rate-limit the message.
    */
   @WorkerThread
   @Throws(GoogleVoiceException::class)
-  fun sendSms(threadId: String, text: String, transactionId: Long, trackingData: String, photo: ByteArray? = null): RespSendSMS {
+  fun sendSms(threadId: String, text: String, transactionId: Long, trackingData: String, photo: ByteArray? = null, recipients: List<String> = emptyList()): RespSendSMS {
     val media = photo?.let { pblite(MEDIA_TYPE_JPEG, it) }
-    val body = pblite(null, null, null, null, text, threadId, null, null, pblite(transactionId), media, pblite(trackingData))
+    val to = recipients.takeIf { it.isNotEmpty() }?.let { PbLite(JSONArray(it).toString()) }
+    val body = pblite(null, null, null, null, text, threadId, to, null, pblite(transactionId), media, pblite(trackingData))
     return RespSendSMS.ADAPTER.decode(post("api2thread/sendsms", body))
   }
 

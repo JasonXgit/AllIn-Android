@@ -266,7 +266,7 @@ data class BubbleMessage(
   val status: SendStatus = SendStatus.RECEIVED
 )
 
-private class PreparedPhoto(val jpeg: ByteArray, val preview: Bitmap)
+internal class PreparedPhoto(val jpeg: ByteArray, val preview: Bitmap)
 
 private data class PendingMessage(
   val localId: String,
@@ -348,7 +348,7 @@ private fun GoogleVoiceConversationScreen(
 }
 
 @Composable
-private fun ComposeBar(
+internal fun ComposeBar(
   draft: String,
   attachment: Bitmap?,
   onDraftChange: (String) -> Unit,

@@ -254,9 +254,9 @@ public final class ConversationListItem extends ConstraintLayout implements Bind
     if (highlightSubstring != null) {
       String name = recipient.get().isSelf() ? getContext().getString(R.string.note_to_self) : recipient.get().getDisplayName(getContext());
 
-      this.fromView.setText(recipient.get(), SearchUtil.getHighlightedSpan(locale, searchStyleFactory, name, highlightSubstring, SearchUtil.MATCH_ALL), suffix, true, false, showPinned && thread.isPinned());
+      this.fromView.setText(recipient.get(), SearchUtil.getHighlightedSpan(locale, searchStyleFactory, name, highlightSubstring, SearchUtil.MATCH_ALL), withSecureLock(suffix), true, false, showPinned && thread.isPinned());
     } else {
-      this.fromView.setText(recipient.get(), recipient.get().getDisplayName(getContext()), suffix, true, false, showPinned && thread.isPinned());
+      this.fromView.setText(recipient.get(), recipient.get().getDisplayName(getContext()), withSecureLock(suffix), true, false, showPinned && thread.isPinned());
     }
 
     this.typingThreads = typingThreads;
@@ -588,9 +588,9 @@ public final class ConversationListItem extends ConstraintLayout implements Bind
       } else {
         name = recipient.getDisplayName(getContext());
       }
-      fromView.setText(recipient, SearchUtil.getHighlightedSpan(locale, searchStyleFactory, new SpannableString(name), highlightSubstring, SearchUtil.MATCH_ALL), null, thread != null, false, thread != null && thread.isPinned());
+      fromView.setText(recipient, SearchUtil.getHighlightedSpan(locale, searchStyleFactory, new SpannableString(name), highlightSubstring, SearchUtil.MATCH_ALL), thread != null ? withSecureLock(null) : null, thread != null, false, thread != null && thread.isPinned());
     } else {
-      fromView.setText(recipient, recipient.getDisplayName(getContext()), null, true, false, thread != null && thread.isPinned());
+      fromView.setText(recipient, recipient.getDisplayName(getContext()), thread != null ? withSecureLock(null) : null, true, false, thread != null && thread.isPinned());
     }
     contactPhotoImage.setAvatar(requestManager, recipient, !batchMode, false);
     setBadgeFromRecipient(recipient);
@@ -847,5 +847,15 @@ public final class ConversationListItem extends ConstraintLayout implements Bind
     if (typingThreads != null) {
       updateTypingIndicator(typingThreads);
     }
+  }
+
+  /** AllIn: a small lock after the name: Signal chats are end-to-end encrypted, unlike Google Voice texts in the list. */
+  private SpannableStringBuilder withSecureLock(@Nullable SpannableStringBuilder suffix) {
+    SpannableStringBuilder result = suffix != null ? suffix : new SpannableStringBuilder();
+    Drawable lock = ContextUtil.requireDrawable(getContext(), R.drawable.symbol_lock_compact_20);
+    lock.setTint(ContextCompat.getColor(getContext(), R.color.signal_icon_tint_secondary));
+    result.append(" ");
+    SpanUtil.appendCenteredImageSpan(result, lock, 13, 13);
+    return result;
   }
 }

@@ -68,6 +68,10 @@ import org.thoughtcrime.securesms.recipients.ui.RecipientSelection
 import org.thoughtcrime.securesms.recipients.ui.findby.FindByActivity
 import org.thoughtcrime.securesms.recipients.ui.findby.FindByMode
 import org.thoughtcrime.securesms.util.CommunicationActions
+import androidx.compose.foundation.layout.Column
+import org.thoughtcrime.securesms.googlevoice.GoogleVoiceInbox
+import org.thoughtcrime.securesms.googlevoice.GoogleVoiceNewTextActivity
+import org.thoughtcrime.securesms.googlevoice.NewGoogleVoiceTextRow
 
 /**
  * Allows the user to start a new conversation by selecting a recipient.
@@ -336,16 +340,23 @@ private fun NewConversationRecipientPicker(
     },
     modifier = modifier.fillMaxSize(),
     belowSearchBar = {
-      AnimatedVisibility(
-        visible = uiState.showSetUpUsernameBanner,
-        enter = fadeIn(tween(150)) + expandVertically(tween(200)),
-        exit = fadeOut(tween(100)) + shrinkVertically(tween(200))
-      ) {
-        SetUpUsernameBanner(
-          onSetUpClick = callbacks::onSetUpUsername,
-          onDismissClick = callbacks::onSetUpUsernameBannerDismissed,
-          modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
-        )
+      Column {
+        // AllIn: offer a Google Voice text alongside Signal's options.
+        if (GoogleVoiceInbox.isActive()) {
+          val context = LocalContext.current
+          NewGoogleVoiceTextRow(onClick = { context.startActivity(GoogleVoiceNewTextActivity.createIntent(context)) })
+        }
+        AnimatedVisibility(
+          visible = uiState.showSetUpUsernameBanner,
+          enter = fadeIn(tween(150)) + expandVertically(tween(200)),
+          exit = fadeOut(tween(100)) + shrinkVertically(tween(200))
+        ) {
+          SetUpUsernameBanner(
+            onSetUpClick = callbacks::onSetUpUsername,
+            onDismissClick = callbacks::onSetUpUsernameBannerDismissed,
+            modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
+          )
+        }
       }
     }
   )
