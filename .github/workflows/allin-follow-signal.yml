@@ -1,0 +1,88 @@
+# AllIn: keeps AllIn on Signal's newest release. Once a day, merges Signal's newest stable tag (vX.Y.Z) into the
+# allin branch. A clean merge resets allinRevision to 1, is pushed, and starts allin-release.yml, so phones update
+# by themselves. A merge with conflicts is abandoned and a GitHub issue asks for a manual merge (GitHub emails it).
+#
+# Signal stops accepting app versions about 90 days old, so a stuck merge must be fixed within weeks.
+
+name: AllIn follow Signal
+
+on:
+  schedule:
+    - cron: '17 9 * * *'
+  workflow_dispatch:
+
+concurrency:
+  group: allin-follow-signal
+  cancel-in-progress: false
+
+permissions:
+  contents: write # push the merge
+  actions: write  # start the release workflow
+  issues: write   # report a merge that needs a person
+
+jobs:
+  follow:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+
+    steps:
+    - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      with:
+        ref: allin
+        fetch-depth: 0
+
+    - name: Find Signal's newest release
+      id: versions
+      run: |
+        git remote add signal https://github.com/signalapp/Signal-Android.git
+        latest=$(git ls-remote --tags signal 'v*' | grep -v '\^{}' | sed 's#.*refs/tags/##' \
+          | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' | sort -V | tail -n 1)
+        current="v$(grep -E '^val canonicalVersionName' app/build.gradle.kts | sed -E 's/.*"(.*)".*/\1/')"
+        echo "Signal: $latest, AllIn is on: $current"
+        echo "latest=$latest" >> "$GITHUB_OUTPUT"
+        if [ -n "$latest" ] && [ "$latest" != "$current" ] \
+          && [ "$(printf '%s\n%s\n' "$current" "$latest" | sort -V | tail -n 1)" = "$latest" ]; then
+          echo "newer=true" >> "$GITHUB_OUTPUT"
+        fi
+
+    - name: Merge it
+      if: steps.versions.outputs.newer == 'true'
+      env:
+        GH_TOKEN: ${{ github.token }}
+        LATEST: ${{ steps.versions.outputs.latest }}
+      run: |
+        git config user.name "AllIn bot"
+        git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+        git fetch --no-tags signal "refs/tags/$LATEST:refs/tags/$LATEST"
+
+        if ! git merge --no-edit "$LATEST"; then
+          # Signal's own CI workflows were deleted on purpose; keep them deleted.
+          for f in $(git diff --name-only --diff-filter=U); do
+            case "$f" in .github/workflows/*) git rm -q "$f" ;; esac
+          done
+          conflicts=$(git diff --name-only --diff-filter=U)
+          if [ -n "$conflicts" ]; then
+            git merge --abort
+            title="AllIn: Signal $LATEST needs a manual merge"
+            if [ -z "$(gh issue list --state open --search "$title in:title" --json number -q '.[].number')" ]; then
+              printf 'Merging Signal %s into allin has conflicts in:\n\n%s\n\nAsk Claude to merge it (see CLAUDE.md, "Following Signal").\n' \
+                "$LATEST" "$(echo "$conflicts" | sed 's/^/- /')" > body.md
+              gh issue create --title "$title" --body-file body.md
+            fi
+            echo "Conflicts; reported as an issue."
+            exit 0
+          fi
+          git commit --no-edit
+        fi
+
+        # Never take Signal's CI workflows (GitHub would also refuse the push without a workflow-scoped token).
+        for f in .github/workflows/*; do
+          case "$(basename "$f")" in allin-*) ;; *) git rm -q --ignore-unmatch "$f" ;; esac
+        done
+        sed -i 's/^allinRevision=.*/allinRevision=1/' gradle.properties
+        git add -A .github/workflows gradle.properties
+        git diff --cached --quiet || git commit -m "AllIn: follow Signal $LATEST (release 1)"
+        git push origin allin
+
+        # Pushes made with this workflow's token don't start other workflows, so start the release directly.
+        gh workflow run allin-release.yml --ref allin
