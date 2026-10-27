@@ -39,8 +39,8 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextField
 import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.setValue
@@ -56,6 +56,7 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.repeatOnLifecycle
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -76,7 +77,8 @@ import java.util.concurrent.TimeUnit
 
 /**
  * AllIn: one Google Voice conversation, loaded from Google and re-checked every few seconds while on screen, with a
- * box to reply (text and photos). Sent messages show straight away and are marked once Google accepts them.
+ * box to reply (text and photos). Sent messages show straight away (see [GoogleVoiceOutbox]), retry by themselves,
+ * and are marked Sent, or "Not sent. Tap to retry."
  */
 class GoogleVoiceConversationActivity : BaseActivity() {
 
@@ -100,14 +102,12 @@ class GoogleVoiceConversationActivity : BaseActivity() {
   private val theme = DynamicNoActionBarTheme()
 
   private var serverMessages by mutableStateOf<List<BubbleMessage>?>(null)
-  private val pending = mutableStateListOf<PendingMessage>()
   private var error by mutableStateOf<String?>(null)
   private var draft by mutableStateOf("")
   private var attachment by mutableStateOf<PreparedPhoto?>(null)
 
   private lateinit var threadId: String
   private var recipients: List<String> = emptyList()
-  private lateinit var signer: GoogleVoiceSigner
 
   override fun onCreate(savedInstanceState: Bundle?) {
     theme.onCreate(this)
@@ -116,14 +116,15 @@ class GoogleVoiceConversationActivity : BaseActivity() {
     threadId = requireNotNull(intent.getStringExtra(EXTRA_THREAD_ID))
     val name = intent.getStringExtra(EXTRA_NAME) ?: "Google Voice"
 
-    signer = GoogleVoiceSigner(this)
-    signer.warmUp()
+    GoogleVoiceOutbox.warmUp()
 
     setContent {
       SignalTheme {
+        // Texts being sent live in GoogleVoiceOutbox, so they survive this screen closing or rotating.
+        val outbox by GoogleVoiceOutbox.items.collectAsState()
         GoogleVoiceConversationScreen(
           name = name,
-          messages = serverMessages?.let { it + pending.map(PendingMessage::toBubble) },
+          messages = serverMessages?.let { server -> server + outbox.filter { it.threadId == threadId }.map { it.toBubble() } },
           error = error,
           draft = draft,
           attachment = attachment?.preview,
@@ -131,7 +132,7 @@ class GoogleVoiceConversationActivity : BaseActivity() {
           onPhotoPicked = ::onPhotoPicked,
           onRemoveAttachment = { attachment = null },
           onSendClick = ::onSendClick,
-          onRetryClick = ::retry,
+          onRetryClick = GoogleVoiceOutbox::retry,
           onNavigationClick = { finish() }
         )
       }
@@ -159,11 +160,6 @@ class GoogleVoiceConversationActivity : BaseActivity() {
     super.onPause()
   }
 
-  override fun onDestroy() {
-    signer.destroy()
-    super.onDestroy()
-  }
-
   private suspend fun loadThread() {
     try {
       val thread = withContext(Dispatchers.IO) { GoogleVoiceApi.getThread(threadId) }
@@ -174,7 +170,7 @@ class GoogleVoiceConversationActivity : BaseActivity() {
         .map { it.toBubble() }
 
       // Once Google lists a message we sent, show Google's copy instead of ours.
-      pending.removeAll { sent -> sent.status == SendStatus.SENT && loaded.any { sent.matches(it) } }
+      GoogleVoiceOutbox.acknowledge(threadId) { sent -> loaded.any { sent.matches(it) } }
       serverMessages = loaded
       error = null
 
@@ -182,7 +178,9 @@ class GoogleVoiceConversationActivity : BaseActivity() {
         GoogleVoiceInbox.markReadLocally(threadId)
         withContext(Dispatchers.IO) { GoogleVoiceApi.markRead(threadId) }
       }
-    } catch (e: GoogleVoiceException) {
+    } catch (e: CancellationException) {
+      throw e
+    } catch (e: Exception) {
       Log.w(TAG, "Couldn't load thread", e)
       if (serverMessages == null) {
         error = if (e is GoogleVoiceException.NotSignedIn) "Signed out of Google Voice. Sign in again in Settings." else "Couldn't load this conversation."
@@ -207,50 +205,9 @@ class GoogleVoiceConversationActivity : BaseActivity() {
     val photo = attachment
     if (text.isEmpty() && photo == null) return
 
-    val message = PendingMessage(
-      localId = "local-${GoogleVoiceApi.newTransactionId()}",
-      text = text,
-      photo = photo,
-      timestamp = System.currentTimeMillis()
-    )
-    pending += message
+    GoogleVoiceOutbox.send(threadId, recipients, text, photo?.jpeg, photo?.preview)
     draft = ""
     attachment = null
-    send(message)
-  }
-
-  private fun retry(localId: String) {
-    val index = pending.indexOfFirst { it.localId == localId }
-    if (index < 0) return
-    val message = pending[index].copy(status = SendStatus.SENDING)
-    pending[index] = message
-    send(message)
-  }
-
-  private fun send(message: PendingMessage) {
-    lifecycleScope.launch {
-      val result = try {
-        val transactionId = GoogleVoiceApi.newTransactionId()
-        // Without a signature, send anyway with the web app's placeholder: Google may still accept it.
-        val signature = signer.sign(threadId, recipients, transactionId) ?: "!".also { Log.w(TAG, "Sending without a signature") }
-        val response = withContext(Dispatchers.IO) { GoogleVoiceApi.sendSms(threadId, message.text, transactionId, signature, message.photo?.jpeg) }
-        message.copy(status = SendStatus.SENT, serverId = response.threadItemID.ifBlank { null })
-      } catch (e: GoogleVoiceException) {
-        Log.w(TAG, "Couldn't send", e)
-        if (e is GoogleVoiceException.NotSignedIn) {
-          Toast.makeText(this@GoogleVoiceConversationActivity, "Signed out of Google Voice. Sign in again in Settings.", Toast.LENGTH_LONG).show()
-        }
-        message.copy(status = SendStatus.FAILED)
-      }
-
-      val index = pending.indexOfFirst { it.localId == message.localId }
-      if (index >= 0) pending[index] = result
-
-      if (result.status == SendStatus.SENT) {
-        loadThread()
-        withContext(Dispatchers.IO) { GoogleVoiceInbox.refresh() }
-      }
-    }
   }
 }
 
@@ -268,21 +225,23 @@ data class BubbleMessage(
 
 internal class PreparedPhoto(val jpeg: ByteArray, val preview: Bitmap)
 
-private data class PendingMessage(
-  val localId: String,
-  val text: String,
-  val photo: PreparedPhoto?,
-  val timestamp: Long,
-  val status: SendStatus = SendStatus.SENDING,
-  val serverId: String? = null
-) {
-  fun toBubble() = BubbleMessage(localId, text, timestamp, outgoing = true, localPhoto = photo?.preview, status = status)
-
-  /** True if [server] is Google's copy of this message. */
-  fun matches(server: BubbleMessage): Boolean {
-    if (serverId != null && server.id == serverId) return true
-    return server.outgoing && server.text == text && server.timestamp >= timestamp - TimeUnit.MINUTES.toMillis(2)
+private fun GoogleVoiceOutbox.Item.toBubble() = BubbleMessage(
+  id = localId,
+  text = text,
+  timestamp = timestamp,
+  outgoing = true,
+  localPhoto = preview,
+  status = when (status) {
+    GoogleVoiceOutbox.Status.SENDING -> SendStatus.SENDING
+    GoogleVoiceOutbox.Status.SENT -> SendStatus.SENT
+    GoogleVoiceOutbox.Status.FAILED -> SendStatus.FAILED
   }
+)
+
+/** True if [server] is Google's copy of this sent text. */
+private fun GoogleVoiceOutbox.Item.matches(server: BubbleMessage): Boolean {
+  if (serverId != null && server.id == serverId) return true
+  return server.outgoing && server.text == text && server.timestamp >= timestamp - TimeUnit.MINUTES.toMillis(2)
 }
 
 private fun Message.toBubble(): BubbleMessage {

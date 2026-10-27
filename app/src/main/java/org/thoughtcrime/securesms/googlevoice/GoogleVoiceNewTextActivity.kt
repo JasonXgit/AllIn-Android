@@ -235,7 +235,9 @@ class GoogleVoiceNewTextActivity : BaseActivity() {
           startActivity(GoogleVoiceConversationActivity.createIntent(this@GoogleVoiceNewTextActivity, response.threadID, name))
         }
         finish()
-      } catch (e: GoogleVoiceException) {
+      } catch (e: kotlinx.coroutines.CancellationException) {
+        throw e
+      } catch (e: Exception) {
         Log.w(TAG, "Couldn't send", e)
         status = if (e is GoogleVoiceException.NotSignedIn) "Signed out of Google Voice. Sign in again in Settings." else "Not sent. Check the number and try again."
       } finally {

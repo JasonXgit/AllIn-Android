@@ -5,14 +5,11 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -64,18 +61,9 @@ private fun GoogleVoiceRow(thread: GoogleVoiceInbox.ThreadSummary, onClick: () -
       .clickable(onClick = onClick),
     verticalAlignment = Alignment.CenterVertically
   ) {
-    // The "slightly different colour on the left": a slim bar beside the avatar.
     Box(
       modifier = Modifier
-        .padding(vertical = 14.dp)
-        .width(4.dp)
-        .fillMaxHeight()
-        .background(GoogleVoiceAccent, RoundedCornerShape(topEnd = 2.dp, bottomEnd = 2.dp))
-    )
-
-    Box(
-      modifier = Modifier
-        .padding(start = 12.dp)
+        .padding(start = 16.dp)
         .size(48.dp)
         .background(GoogleVoiceAccent.copy(alpha = 0.25f), CircleShape),
       contentAlignment = Alignment.Center
