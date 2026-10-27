@@ -467,6 +467,7 @@ android {
     create("play") {
       dimension = "distribution"
       isDefault = true
+      applicationId = project.property("allinPlayApplicationId") as String
       buildConfigField("boolean", "MANAGES_APP_UPDATES", "false")
       buildConfigField("String", "APK_UPDATE_MANIFEST_URL", "null")
       buildConfigField("String", "BUILD_DISTRIBUTION_TYPE", "\"play\"")
