@@ -275,7 +275,7 @@ android {
       applicationIdSuffix = ".test_run"
     }
 
-    minSdk = libs.versions.minSdk.get().toInt()
+    minSdk = 24 // AllIn: Google Play's automatic protection needs 24+
     targetSdk = libs.versions.targetSdk.get().toInt()
 
     vectorDrawables.useSupportLibrary = true
