@@ -77,7 +77,10 @@ jobs:
     - name: Build the release APK and the Google Play bundle
       if: steps.version.outputs.exists != 'true'
       # websiteProd = the APK that updates itself from GitHub; playProd = the bundle for Google Play (no self-update).
-      run: ./gradlew --no-daemon assembleWebsiteProdRelease bundlePlayProdRelease
+      # Two separate Gradle runs: compiling both variants in one run exhausts the runner's memory.
+      run: |
+        ./gradlew --no-daemon assembleWebsiteProdRelease
+        ./gradlew --no-daemon bundlePlayProdRelease
 
     - name: Publish the release
       id: publish
