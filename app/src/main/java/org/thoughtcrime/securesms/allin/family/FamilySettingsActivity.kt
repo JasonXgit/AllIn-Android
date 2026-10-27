@@ -23,6 +23,7 @@ import org.signal.core.ui.compose.Rows
 import org.signal.core.ui.compose.Scaffolds
 import org.signal.core.ui.compose.SignalIcons
 import org.signal.core.ui.compose.theme.SignalTheme
+import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import org.signal.core.util.concurrent.SignalExecutors
 import org.thoughtcrime.securesms.BaseActivity
 import org.thoughtcrime.securesms.keyvalue.SignalStore
@@ -145,6 +146,24 @@ class FamilySettingsActivity : BaseActivity() {
       status = "Only works on the phone where AllIn is your main Signal app."
       return
     }
+    if (on) {
+      // Google Play requires this explanation, in the app, before asking for background location.
+      MaterialAlertDialogBuilder(this)
+        .setTitle("Share this phone's location?")
+        .setMessage(
+          "AllIn collects this phone's location to let your family find it and see where it is, even when the app is " +
+            "closed or not in use. It's sent only to your family's bot (${Family.controller}) over Signal, end-to-end " +
+            "encrypted, and is used for nothing else. You can turn this off here at any time."
+        )
+        .setPositiveButton("Continue") { _, _ -> applyEnabled(true) }
+        .setNegativeButton("Not now", null)
+        .show()
+    } else {
+      applyEnabled(false)
+    }
+  }
+
+  private fun applyEnabled(on: Boolean) {
     Family.enabled = on
     refresh()
     if (on) {

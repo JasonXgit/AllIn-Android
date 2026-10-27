@@ -26,6 +26,8 @@ jobs:
   release:
     runs-on: ubuntu-latest
     timeout-minutes: 180
+    env:
+      HAS_PLAY_JSON: ${{ secrets.PLAY_SERVICE_ACCOUNT_JSON != '' }}
 
     steps:
     - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -72,11 +74,13 @@ jobs:
         ALLIN_KEYSTORE_B64: ${{ secrets.ALLIN_KEYSTORE_B64 }}
         ALLIN_KEYSTORE_PASSWORD: ${{ secrets.ALLIN_KEYSTORE_PASSWORD }}
 
-    - name: Build the release APK
+    - name: Build the release APK and the Google Play bundle
       if: steps.version.outputs.exists != 'true'
-      run: ./gradlew --no-daemon assembleWebsiteProdRelease
+      # websiteProd = the APK that updates itself from GitHub; playProd = the bundle for Google Play (no self-update).
+      run: ./gradlew --no-daemon assembleWebsiteProdRelease bundlePlayProdRelease
 
     - name: Publish the release
+      id: publish
       if: steps.version.outputs.exists != 'true'
       run: |
         version="${{ steps.version.outputs.name }}"
@@ -98,8 +102,25 @@ jobs:
           "uploadTimestamp": $(date +%s%3N)
         }
         EOF
-        gh release create "v$version" "$asset" latest.json --target "$GITHUB_SHA" --title "AllIn $version" \
+        bundle="AllIn-$version-play.aab"
+        cp "$(ls app/build/outputs/bundle/playProdRelease/*.aab | head -1)" "$bundle"
+        echo "bundle=$bundle" >> "$GITHUB_OUTPUT"
+        gh release create "v$version" "$asset" latest.json "$bundle" --target "$GITHUB_SHA" --title "AllIn $version" \
           --notes "${NOTES:-AllIn update}"
       env:
         GH_TOKEN: ${{ github.token }}
         NOTES: ${{ github.event.head_commit.message }}
+
+    # Google Play closed testing ("alpha" track). Needs the secret PLAY_SERVICE_ACCOUNT_JSON (a Google Cloud service
+    # account invited in Play Console > Users and permissions), and the app's FIRST bundle uploaded by hand in Play
+    # Console. Without the secret this is skipped; upload AllIn-<version>-play.aab from the GitHub release by hand.
+    - name: Upload to Google Play (closed testing)
+      if: steps.version.outputs.exists != 'true' && env.HAS_PLAY_JSON == 'true'
+      continue-on-error: true
+      uses: r0adkll/upload-google-play@v1
+      with:
+        serviceAccountJsonPlainText: ${{ secrets.PLAY_SERVICE_ACCOUNT_JSON }}
+        packageName: ky.jason.allin
+        releaseFiles: ${{ steps.publish.outputs.bundle }}
+        track: alpha
+        status: completed
