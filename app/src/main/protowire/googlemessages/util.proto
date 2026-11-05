@@ -1,0 +1,10 @@
+// AllIn: Google Messages for web protocol, from mautrix-gmessages (https://github.com/mautrix/gmessages),
+// Copyright (C) Tulir Asokan and contributors, AGPL-3.0. Field names are reverse-engineered and may change.
+syntax = "proto3";
+package gmessages.util;
+option java_package = "org.thoughtcrime.securesms.googlemessages.proto";
+
+
+message EmptyArr {
+
+}

@@ -916,6 +916,10 @@ message SyncMessage {
   reserved /*pniIdentity*/ 17;
 
   optional bytes padding = 8;
+
+  // AllIn: a private message between the user's own AllIn devices (phone texts relayed to AllIn Desktop).
+  // Signal's own apps ignore it.
+  optional bytes allinRelay = 1001;
 }
 
 message AttachmentPointer {

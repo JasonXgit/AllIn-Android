@@ -516,6 +516,17 @@ private fun AppSettingsContent(
         item {
           val context = LocalContext.current
           Rows.TextRow(
+            text = "Phone texts (SMS & RCS)",
+            icon = painterResource(R.drawable.symbol_chat_24),
+            onClick = {
+              context.startActivity(org.thoughtcrime.securesms.googlemessages.GoogleMessagesSettingsActivity.createIntent(context))
+            }
+          )
+        }
+
+        item {
+          val context = LocalContext.current
+          Rows.TextRow(
             text = "Family (Find My Device)",
             icon = painterResource(R.drawable.symbol_location_circle_24),
             onClick = {

@@ -204,7 +204,7 @@ class ConversationListAdapter extends ListAdapter<Conversation, RecyclerView.Vie
       casted.bind(conversation);
     } else if (holder.getItemViewType() == TYPE_GOOGLE_VOICE) {
       Conversation conversation = Objects.requireNonNull(getItem(position));
-      GoogleVoiceListRow.bind((ComposeView) holder.itemView, GoogleVoiceInbox.INSTANCE.find(conversation.getThreadRecord().getThreadId()));
+      GoogleVoiceListRow.bind((ComposeView) holder.itemView, GoogleVoiceInbox.findAny(conversation.getThreadRecord().getThreadId()));
     }
   }
 

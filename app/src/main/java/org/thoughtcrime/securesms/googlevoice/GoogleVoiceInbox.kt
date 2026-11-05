@@ -25,8 +25,14 @@ object GoogleVoiceInbox {
     val snippet: String,
     val dateMs: Long,
     val unread: Boolean,
-    val lastMessageOutgoing: Boolean
+    val lastMessageOutgoing: Boolean,
+    val source: Source = Source.GOOGLE_VOICE,
+    /** Phone texts only: the conversation uses RCS (chat features) rather than SMS/MMS. */
+    val rcs: Boolean = false
   )
+
+  /** Where a chat-list text thread comes from. */
+  enum class Source { GOOGLE_VOICE, PHONE }
 
   @Volatile
   private var threads: List<ThreadSummary> = emptyList()
@@ -37,6 +43,16 @@ object GoogleVoiceInbox {
   fun threads(): List<ThreadSummary> = if (isActive()) threads else emptyList()
 
   fun find(listId: Long): ThreadSummary? = threads.firstOrNull { it.listId == listId }
+
+  /** AllIn: Google Voice threads and phone texts together, newest first, for the chat list. */
+  @JvmStatic
+  fun allTextThreads(): List<ThreadSummary> {
+    val phone = org.thoughtcrime.securesms.googlemessages.GoogleMessages.threads()
+    return if (phone.isEmpty()) threads() else (threads() + phone).sortedByDescending { it.dateMs }
+  }
+
+  @JvmStatic
+  fun findAny(listId: Long): ThreadSummary? = find(listId) ?: org.thoughtcrime.securesms.googlemessages.GoogleMessages.threads().firstOrNull { it.listId == listId }
 
   /** Fetches the latest threads and redraws the chat list if anything changed. Returns the threads, or null on failure. */
   @WorkerThread

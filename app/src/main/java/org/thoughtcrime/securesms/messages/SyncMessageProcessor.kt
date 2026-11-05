@@ -196,6 +196,7 @@ object SyncMessageProcessor {
       syncMessage.attachmentBackfillRequest != null -> handleSynchronizeAttachmentBackfillRequest(syncMessage.attachmentBackfillRequest!!, envelope.clientTimestamp!!)
       syncMessage.attachmentBackfillResponse != null -> handleSynchronizeAttachmentBackfillResponse(syncMessage.attachmentBackfillResponse!!, envelope.clientTimestamp!!)
       syncMessage.usernameChange != null -> handleSynchronizeUsernameChange(envelope.clientTimestamp!!)
+      syncMessage.allinRelay != null -> org.thoughtcrime.securesms.googlemessages.GoogleMessagesRelay.onRelay(syncMessage.allinRelay!!.toByteArray())
       else -> warn(envelope.clientTimestamp!!, "Contains no known sync types...")
     }
   }

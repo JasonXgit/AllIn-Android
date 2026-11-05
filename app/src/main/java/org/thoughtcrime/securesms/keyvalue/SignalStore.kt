@@ -40,6 +40,7 @@ class SignalStore(context: Application, private val store: KeyValueStore) {
   val callQualityValues = CallQualityValues(store)
   val labsValues = LabsValues(store)
   val googleVoiceValues = GoogleVoiceValues(store)
+  val googleMessagesValues = GoogleMessagesValues(store)
   val fantasyValues = FantasyValues(store)
 
   companion object {
@@ -89,6 +90,7 @@ class SignalStore(context: Application, private val store: KeyValueStore) {
       callQuality.onFirstEverAppLaunch()
       labs.onFirstEverAppLaunch()
       googleVoice.onFirstEverAppLaunch()
+      googleMessages.onFirstEverAppLaunch()
       fantasy.onFirstEverAppLaunch()
     }
 
@@ -125,6 +127,7 @@ class SignalStore(context: Application, private val store: KeyValueStore) {
           callQuality.keysToIncludeInBackup +
           labs.keysToIncludeInBackup +
           googleVoice.keysToIncludeInBackup +
+          googleMessages.keysToIncludeInBackup +
           fantasy.keysToIncludeInBackup
       }
 
@@ -301,6 +304,11 @@ class SignalStore(context: Application, private val store: KeyValueStore) {
     @get:JvmName("googleVoice")
     val googleVoice: GoogleVoiceValues
       get() = instance!!.googleVoiceValues
+
+    @JvmStatic
+    @get:JvmName("googleMessages")
+    val googleMessages: GoogleMessagesValues
+      get() = instance!!.googleMessagesValues
 
     @JvmStatic
     @get:JvmName("fantasy")

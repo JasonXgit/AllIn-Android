@@ -220,7 +220,7 @@ abstract class ConversationListDataSource implements PagedDataSource<Long, Conve
      * Signal chats newer than it, plus the Google Voice threads newer than it.
      */
     private void computeGoogleVoiceRows() {
-      List<GoogleVoiceInbox.ThreadSummary> threads = GoogleVoiceInbox.INSTANCE.threads();
+      List<GoogleVoiceInbox.ThreadSummary> threads = GoogleVoiceInbox.allTextThreads();
 
       if (threads.isEmpty() || conversationFilter != ConversationFilter.OFF || chatFolder.getFolderType() != ChatFolderRecord.FolderType.ALL) {
         googleVoiceRows      = Collections.emptyList();

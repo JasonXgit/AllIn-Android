@@ -30,6 +30,9 @@ import java.util.Locale
 /** AllIn: the accent that marks Google Voice threads in the chat list (Google Voice's green). */
 val GoogleVoiceAccent = Color(0xFF34A853)
 
+/** AllIn: the accent for phone texts (SMS, MMS, RCS through Google Messages). */
+val PhoneTextsAccent = Color(0xFF1A73E8)
+
 /**
  * AllIn: draws a Google Voice thread as a chat-list row. Called from ConversationListAdapter (Java).
  */
@@ -40,7 +43,12 @@ object GoogleVoiceListRow {
       SignalTheme {
         if (thread != null) {
           GoogleVoiceRow(thread) {
-            view.context.startActivity(GoogleVoiceConversationActivity.createIntent(view.context, thread.threadId, thread.name))
+            val intent = if (thread.source == GoogleVoiceInbox.Source.PHONE) {
+              org.thoughtcrime.securesms.googlemessages.GoogleMessagesConversationActivity.createIntent(view.context, thread.threadId, thread.name)
+            } else {
+              GoogleVoiceConversationActivity.createIntent(view.context, thread.threadId, thread.name)
+            }
+            view.context.startActivity(intent)
           }
         }
       }
@@ -65,7 +73,7 @@ private fun GoogleVoiceRow(thread: GoogleVoiceInbox.ThreadSummary, onClick: () -
       modifier = Modifier
         .padding(start = 16.dp)
         .size(48.dp)
-        .background(GoogleVoiceAccent.copy(alpha = 0.25f), CircleShape),
+        .background((if (thread.source == GoogleVoiceInbox.Source.PHONE) PhoneTextsAccent else GoogleVoiceAccent).copy(alpha = 0.25f), CircleShape),
       contentAlignment = Alignment.Center
     ) {
       Text(

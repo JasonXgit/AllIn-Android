@@ -313,7 +313,9 @@ internal fun ComposeBar(
   onDraftChange: (String) -> Unit,
   onPhotoPicked: (Uri) -> Unit,
   onRemoveAttachment: () -> Unit,
-  onSendClick: () -> Unit
+  onSendClick: () -> Unit,
+  placeholder: String = "Google Voice message",
+  accent: Color = GoogleVoiceAccent
 ) {
   val pickPhoto = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri -> uri?.let(onPhotoPicked) }
   val canSend = draft.isNotBlank() || attachment != null
@@ -358,7 +360,7 @@ internal fun ComposeBar(
       TextField(
         value = draft,
         onValueChange = onDraftChange,
-        placeholder = { Text("Google Voice message") },
+        placeholder = { Text(placeholder) },
         maxLines = 5,
         shape = RoundedCornerShape(24.dp),
         colors = TextFieldDefaults.colors(
@@ -372,7 +374,7 @@ internal fun ComposeBar(
         Icon(
           painter = painterResource(CoreUiR.drawable.symbol_send_fill_24),
           contentDescription = "Send",
-          tint = if (canSend) GoogleVoiceAccent else MaterialTheme.colorScheme.onSurfaceVariant
+          tint = if (canSend) accent else MaterialTheme.colorScheme.onSurfaceVariant
         )
       }
     }
