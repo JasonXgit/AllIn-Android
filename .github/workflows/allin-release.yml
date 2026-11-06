@@ -114,10 +114,10 @@ jobs:
         GH_TOKEN: ${{ github.token }}
         NOTES: ${{ github.event.head_commit.message }}
 
-    # Google Play closed testing ("alpha" track). Needs the secret PLAY_SERVICE_ACCOUNT_JSON (a Google Cloud service
+    # Google Play internal testing ("internal" track: family testers, no Google review; was closed testing until 2026-11-06). Needs the secret PLAY_SERVICE_ACCOUNT_JSON (a Google Cloud service
     # account invited in Play Console > Users and permissions), and the app's FIRST bundle uploaded by hand in Play
     # Console. Without the secret this is skipped; upload AllIn-<version>-play.aab from the GitHub release by hand.
-    - name: Upload to Google Play (closed testing)
+    - name: Upload to Google Play (internal testing)
       id: play
       if: steps.version.outputs.exists != 'true' && env.HAS_PLAY_JSON == 'true'
       continue-on-error: true
@@ -126,11 +126,11 @@ jobs:
         serviceAccountJsonPlainText: ${{ secrets.PLAY_SERVICE_ACCOUNT_JSON }}
         packageName: com.castleapps.allin
         releaseFiles: ${{ steps.publish.outputs.bundle }}
-        tracks: alpha
+        tracks: internal
         status: completed
 
     # Until Google has approved the app's first release, Play only accepts drafts ("Only releases with status draft
-    # may be created on draft app"); then Jason rolls it out in Play Console > Closed testing.
+    # may be created on draft app"); then Jason rolls it out in Play Console > Internal testing.
     - name: Upload to Google Play as a draft (app not yet approved)
       if: steps.play.outcome == 'failure'
       continue-on-error: true
@@ -139,5 +139,5 @@ jobs:
         serviceAccountJsonPlainText: ${{ secrets.PLAY_SERVICE_ACCOUNT_JSON }}
         packageName: com.castleapps.allin
         releaseFiles: ${{ steps.publish.outputs.bundle }}
-        tracks: alpha
+        tracks: internal
         status: draft

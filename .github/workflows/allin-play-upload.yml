@@ -1,4 +1,4 @@
-# AllIn: sends an existing GitHub release's Google Play bundle to Play's closed testing track, without rebuilding.
+# AllIn: sends an existing GitHub release's Google Play bundle to Play's internal testing track, without rebuilding.
 # Use it when a release's own upload failed. Play needs a version it hasn't seen, so it can't re-send one Play has.
 name: AllIn Google Play upload
 
@@ -11,7 +11,7 @@ on:
       status:
         description: 'completed (roll out to testers) or draft (needed until Google approves the app)'
         required: true
-        default: draft
+        default: completed
 
 jobs:
   upload:
@@ -22,11 +22,11 @@ jobs:
       env:
         GH_TOKEN: ${{ github.token }}
 
-    - name: Upload to Google Play (closed testing)
+    - name: Upload to Google Play (internal testing)
       uses: r0adkll/upload-google-play@v1
       with:
         serviceAccountJsonPlainText: ${{ secrets.PLAY_SERVICE_ACCOUNT_JSON }}
         packageName: com.castleapps.allin
         releaseFiles: '*-play.aab'
-        tracks: alpha
+        tracks: internal
         status: ${{ inputs.status }}
