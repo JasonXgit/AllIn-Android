@@ -118,6 +118,7 @@ jobs:
     # account invited in Play Console > Users and permissions), and the app's FIRST bundle uploaded by hand in Play
     # Console. Without the secret this is skipped; upload AllIn-<version>-play.aab from the GitHub release by hand.
     - name: Upload to Google Play (closed testing)
+      id: play
       if: steps.version.outputs.exists != 'true' && env.HAS_PLAY_JSON == 'true'
       continue-on-error: true
       uses: r0adkll/upload-google-play@v1
@@ -125,5 +126,18 @@ jobs:
         serviceAccountJsonPlainText: ${{ secrets.PLAY_SERVICE_ACCOUNT_JSON }}
         packageName: com.castleapps.allin
         releaseFiles: ${{ steps.publish.outputs.bundle }}
-        track: alpha
+        tracks: alpha
         status: completed
+
+    # Until Google has approved the app's first release, Play only accepts drafts ("Only releases with status draft
+    # may be created on draft app"); then Jason rolls it out in Play Console > Closed testing.
+    - name: Upload to Google Play as a draft (app not yet approved)
+      if: steps.play.outcome == 'failure'
+      continue-on-error: true
+      uses: r0adkll/upload-google-play@v1
+      with:
+        serviceAccountJsonPlainText: ${{ secrets.PLAY_SERVICE_ACCOUNT_JSON }}
+        packageName: com.castleapps.allin
+        releaseFiles: ${{ steps.publish.outputs.bundle }}
+        tracks: alpha
+        status: draft

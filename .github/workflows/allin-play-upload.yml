@@ -1,0 +1,32 @@
+# AllIn: sends an existing GitHub release's Google Play bundle to Play's closed testing track, without rebuilding.
+# Use it when a release's own upload failed. Play needs a version it hasn't seen, so it can't re-send one Play has.
+name: AllIn Google Play upload
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'GitHub release tag, e.g. v8.33.2-allin.8'
+        required: true
+      status:
+        description: 'completed (roll out to testers) or draft (needed until Google approves the app)'
+        required: true
+        default: draft
+
+jobs:
+  upload:
+    runs-on: ubuntu-latest
+    steps:
+    - name: Download the bundle
+      run: gh release download "${{ inputs.tag }}" --repo "${{ github.repository }}" --pattern '*-play.aab' --dir .
+      env:
+        GH_TOKEN: ${{ github.token }}
+
+    - name: Upload to Google Play (closed testing)
+      uses: r0adkll/upload-google-play@v1
+      with:
+        serviceAccountJsonPlainText: ${{ secrets.PLAY_SERVICE_ACCOUNT_JSON }}
+        packageName: com.castleapps.allin
+        releaseFiles: '*-play.aab'
+        tracks: alpha
+        status: ${{ inputs.status }}
