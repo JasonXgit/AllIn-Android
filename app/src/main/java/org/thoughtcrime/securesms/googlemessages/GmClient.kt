@@ -681,8 +681,13 @@ class GmClient(val auth: GmAuth, private val onEvent: (GmEvent) -> Unit) {
     auth.browser = device
     auth.mobile = device.copy(sourceID = device.sourceID.lowercase())
 
+    val items2 = response.deviceData.unknownItems2
+    val items3 = response.deviceData.unknownItems3
+    val summary = "devices ${items2.size}: types ${items2.map { it.unknownInt4 }}; seen ${items3.size}: types ${items3.map { it.unknownInt3 }}"
+    Log.i(TAG, "SignInGaia: $summary")
     val devices = mutableMapOf<String, PrimaryDevice>()
-    response.deviceData.unknownItems2.filter { it.unknownInt4 == 1 }.forEach {
+    // Type 1 is the phone (mautrix-gmessages); if Google labels it differently, take anything that isn't this browser (6).
+    (items2.filter { it.unknownInt4 == 1 }.ifEmpty { items2.filter { it.unknownInt4 != 6 && it.destOrSourceUUID.isNotBlank() } }).forEach {
       devices[it.destOrSourceUUID] = PrimaryDevice(it.destOrSourceUUID, it.unknownBigInt7)
     }
     response.deviceData.unknownItems3.forEach { item ->
@@ -691,7 +696,7 @@ class GmClient(val auth: GmAuth, private val onEvent: (GmEvent) -> Unit) {
         it.unknownTs = item.item8?.unknownTimestamp ?: 0
       }
     }
-    val phone = devices.values.maxByOrNull { it.lastSeenMicros } ?: throw GmException.NoPhone()
+    val phone = devices.values.maxByOrNull { it.lastSeenMicros } ?: throw GmException.NoPhone(summary)
     auth.destRegId = UUID.fromString(phone.regId)
 
     val connectedSignal = CompletableDeferred<Unit>()
@@ -923,7 +928,7 @@ sealed interface GmEvent {
 
 sealed class GmException(message: String, cause: Throwable? = null) : Exception(message, cause) {
   class LoggedOut(message: String) : GmException(message)
-  class NoPhone : GmException("No phone with Google Messages was found on this Google account")
+  class NoPhone(val details: String) : GmException("No phone with Google Messages was found on this Google account ($details)")
   class PairingFailed(message: String) : GmException(message)
   class Failed(message: String, cause: Throwable? = null) : GmException(message, cause)
 }

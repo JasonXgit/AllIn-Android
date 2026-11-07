@@ -166,7 +166,7 @@ class GoogleMessagesSettingsActivity : BaseActivity() {
         client.close()
         pairState = PairState.Failed(
           when (e) {
-            is GmException.NoPhone -> "Couldn't find Google Messages on this Google account. In Google Messages, open Settings › Device pairing and make sure you're signed in to the same Google account."
+            is GmException.NoPhone -> "Couldn't find Google Messages on this Google account. In Google Messages, open Settings › Device pairing and make sure you're signed in to the same Google account. (Google said: ${e.details})"
             is GmException.PairingFailed -> e.message ?: "Pairing didn't finish."
             is GmException.LoggedOut -> "Google signed you out. Tap to sign in again."
             else -> "Couldn't reach Google Messages on your phone. Make sure it's set as your texting app and try again."
