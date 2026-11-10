@@ -38,6 +38,7 @@ import org.signal.core.util.logging.Log
 import org.thoughtcrime.securesms.BaseActivity
 import org.thoughtcrime.securesms.keyvalue.SignalStore
 import org.thoughtcrime.securesms.util.DynamicNoActionBarTheme
+import org.thoughtcrime.securesms.websession.WebProfiles
 
 /**
  * AllIn: the phone texts settings screen: turn the feature on, pair with Google Messages, notifications, and
@@ -164,9 +165,14 @@ class GoogleMessagesSettingsActivity : BaseActivity() {
       } catch (e: Exception) {
         Log.w(TAG, "Pairing failed", e)
         client.close()
+        if (e is GmException.NoPhone || e is GmException.LoggedOut) {
+          // Wrong or expired Google account: sign out of phone texts only (Google Voice keeps its own sign-in),
+          // so the next tap asks which account to use.
+          WebProfiles.clear(GoogleMessagesSignInActivity.PROFILE)
+        }
         pairState = PairState.Failed(
           when (e) {
-            is GmException.NoPhone -> "Couldn't find Google Messages on this Google account. In Google Messages, open Settings › Device pairing and make sure you're signed in to the same Google account. (Google said: ${e.details})"
+            is GmException.NoPhone -> "That Google account has no phone with Google Messages. Tap to sign in with the account Google Messages uses (tap your picture in Google Messages to see it). (Google said: ${e.details})"
             is GmException.PairingFailed -> e.message ?: "Pairing didn't finish."
             is GmException.LoggedOut -> "Google signed you out. Tap to sign in again."
             else -> "Couldn't reach Google Messages on your phone. Make sure it's set as your texting app and try again."

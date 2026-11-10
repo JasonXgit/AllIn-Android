@@ -3,6 +3,7 @@ package org.thoughtcrime.securesms.googlemessages
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
+import org.thoughtcrime.securesms.websession.WebProfiles
 import org.thoughtcrime.securesms.websession.WebSignInActivity
 
 /**
@@ -18,10 +19,15 @@ class GoogleMessagesSignInActivity : WebSignInActivity() {
     @JvmStatic
     fun createIntent(context: Context): Intent = Intent(context, GoogleMessagesSignInActivity::class.java)
 
-    fun hasSession(): Boolean = cookie(ORIGIN, "SAPISID") != null && cookie(ORIGIN, "OSID") != null
+    /** Phone texts have their own Google sign-in, separate from Google Voice's (they may be different accounts). */
+    const val PROFILE = WebProfiles.PHONE_TEXTS
+
+    fun hasSession(): Boolean = cookie(ORIGIN, "SAPISID", PROFILE) != null && cookie(ORIGIN, "OSID", PROFILE) != null
   }
 
   override val signInUrl = SIGN_IN_URL
+
+  override val webProfile: String = PROFILE
 
   override val successMessage = "Signed in to Google"
 

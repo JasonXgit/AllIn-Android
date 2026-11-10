@@ -1,7 +1,6 @@
 package org.thoughtcrime.securesms.googlemessages
 
 import android.util.Base64
-import android.webkit.CookieManager
 import com.squareup.wire.Message
 import com.squareup.wire.ProtoAdapter
 import kotlinx.coroutines.CompletableDeferred
@@ -74,6 +73,7 @@ import org.thoughtcrime.securesms.googlemessages.proto.Ukey2Message
 import org.thoughtcrime.securesms.googlemessages.proto.Ukey2ServerInit
 import org.thoughtcrime.securesms.googlemessages.proto.UpdateEvents
 import org.thoughtcrime.securesms.googlemessages.proto.UploadMediaResponse
+import org.thoughtcrime.securesms.websession.WebProfiles
 import java.io.IOException
 import java.nio.ByteBuffer
 import java.security.MessageDigest
@@ -833,7 +833,7 @@ class GmClient(val auth: GmAuth, private val onEvent: (GmEvent) -> Unit) {
       .header("accept-language", "en-US,en;q=0.9")
     contentType?.let { builder.header("content-type", it) }
 
-    val cookies = CookieManager.getInstance().getCookie(ORIGIN) ?: throw GmException.LoggedOut("No Google cookies")
+    val cookies = WebProfiles.cookieManager(GoogleMessagesSignInActivity.PROFILE).getCookie(ORIGIN) ?: throw GmException.LoggedOut("No Google cookies")
     builder.header("Cookie", cookies)
     val sapisid = cookies.split(';').map { it.trim() }.firstOrNull { it.startsWith("SAPISID=") }?.substringAfter('=')
       ?: throw GmException.LoggedOut("Not signed in to Google")

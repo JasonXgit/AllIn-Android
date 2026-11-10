@@ -13,6 +13,7 @@ import android.widget.Toast
 import androidx.activity.addCallback
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
+import androidx.webkit.WebViewCompat
 import org.signal.core.util.logging.Log
 import org.thoughtcrime.securesms.BaseActivity
 import org.thoughtcrime.securesms.util.DynamicNoActionBarTheme
@@ -39,6 +40,9 @@ abstract class WebSignInActivity : BaseActivity() {
   /** Called after every page load; return true once the session is usable. */
   protected abstract fun isSignedIn(uri: Uri): Boolean
 
+  /** A separate cookie store for this sign-in (see [WebProfiles]); null shares the default one. */
+  protected open val webProfile: String? = null
+
   /** Persist that the user is signed in. */
   protected abstract fun onSignedIn()
 
@@ -50,6 +54,13 @@ abstract class WebSignInActivity : BaseActivity() {
     // WebView ignores its own padding when drawing page content, so the system-bar insets go on a container instead;
     // otherwise sites' top menus end up under the status bar.
     webView = WebView(this)
+    val profile = webProfile
+    if (profile != null && WebProfiles.isSupported()) {
+      // Must happen before the WebView loads anything.
+      WebProfiles.cookieManager(profile)
+      WebViewCompat.setProfile(webView, profile)
+    }
+    val cookies = WebProfiles.cookieManager(profile)
     val container = FrameLayout(this)
     container.addView(webView, FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT))
     setContentView(container)
@@ -63,8 +74,8 @@ abstract class WebSignInActivity : BaseActivity() {
     webView.settings.javaScriptEnabled = true
     webView.settings.domStorageEnabled = true
     webView.settings.userAgentString = chromeUserAgent(this)
-    CookieManager.getInstance().setAcceptCookie(true)
-    CookieManager.getInstance().setAcceptThirdPartyCookies(webView, true)
+    cookies.setAcceptCookie(true)
+    cookies.setAcceptThirdPartyCookies(webView, true)
 
     webView.webViewClient = object : WebViewClient() {
       override fun onPageFinished(view: WebView, url: String) {
@@ -73,7 +84,7 @@ abstract class WebSignInActivity : BaseActivity() {
 
         if (!isFinishing && isSignedIn(uri)) {
           Log.i(tag, "Sign-in succeeded.")
-          CookieManager.getInstance().flush()
+          cookies.flush()
           onSignedIn()
           Toast.makeText(this@WebSignInActivity, successMessage, Toast.LENGTH_SHORT).show()
           finish()
@@ -102,8 +113,8 @@ abstract class WebSignInActivity : BaseActivity() {
 
   companion object {
     /** Returns the value of cookie [name] that the WebView would send to [url], if any. */
-    fun cookie(url: String, name: String): String? {
-      return CookieManager.getInstance().getCookie(url)
+    fun cookie(url: String, name: String, profile: String? = null): String? {
+      return WebProfiles.cookieManager(profile).getCookie(url)
         ?.split(';')
         ?.map { it.trim() }
         ?.firstOrNull { it.startsWith("$name=") }

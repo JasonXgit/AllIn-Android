@@ -760,6 +760,7 @@ dependencies {
   implementation(libs.androidx.compose.rxjava3)
   implementation(libs.androidx.compose.runtime.livedata)
   implementation(libs.androidx.activity.compose)
+  implementation(libs.androidx.webkit) // AllIn: separate WebView cookie profile for phone texts
   implementation(libs.androidx.constraintlayout)
   implementation(libs.androidx.navigation.fragment.ktx)
   implementation(libs.androidx.navigation.ui.ktx)
