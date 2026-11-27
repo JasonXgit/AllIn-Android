@@ -1,6 +1,7 @@
 package org.thoughtcrime.securesms.conversationlist
 
 import android.view.View
+import androidx.annotation.DrawableRes
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
@@ -14,6 +15,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
@@ -36,6 +38,10 @@ import org.signal.core.ui.compose.Previews
 import org.signal.core.ui.compose.theme.SignalTheme
 import org.signal.core.util.logging.Log
 import org.thoughtcrime.securesms.R
+import org.thoughtcrime.securesms.allin.deals.DealsActivity
+import org.thoughtcrime.securesms.allin.deals.DealsData
+import org.thoughtcrime.securesms.allin.deals.DealsStore
+import org.thoughtcrime.securesms.allin.deals.DealsSync
 import org.thoughtcrime.securesms.fantasy.EspnApi
 import org.thoughtcrime.securesms.fantasy.EspnException
 import org.thoughtcrime.securesms.fantasy.FantasyFootballActivity
@@ -44,7 +50,7 @@ import org.thoughtcrime.securesms.keyvalue.SignalStore
 import java.util.Locale
 
 /**
- * AllIn: rows pinned above the chat list for AllIn's own features (currently Fantasy Football), plus the refresh
+ * AllIn: rows pinned above the chat list for AllIn's own features (Deals, Fantasy Football), plus the refresh
  * loop that keeps Google Voice threads in the list current.
  *
  * The pinned rows live in a ComposeView above the list rather than inside its paged adapter, so Signal's swipe,
@@ -60,14 +66,28 @@ class AllInPinnedRows(private val view: ComposeView, private val owner: Lifecycl
   }
 
   private var fantasySummary by mutableStateOf<String?>(null)
+  private var showFantasy by mutableStateOf(false)
+  private var showDeals by mutableStateOf(false)
 
   init {
     view.setContent {
       SignalTheme {
-        FantasyRow(
-          summary = fantasySummary,
-          onClick = { view.context.startActivity(FantasyFootballActivity.createIntent(view.context)) }
-        )
+        Column {
+          if (showDeals) {
+            val deals by DealsStore.data.collectAsState()
+            val status by DealsSync.status.collectAsState()
+            DealsRow(
+              summary = dealsSummary(deals, status),
+              onClick = { view.context.startActivity(DealsActivity.createIntent(view.context)) }
+            )
+          }
+          if (showFantasy) {
+            FantasyRow(
+              summary = fantasySummary,
+              onClick = { view.context.startActivity(FantasyFootballActivity.createIntent(view.context)) }
+            )
+          }
+        }
       }
     }
 
@@ -82,9 +102,11 @@ class AllInPinnedRows(private val view: ComposeView, private val owner: Lifecycl
   }
 
   fun refresh(isArchive: Boolean) {
-    val show = !isArchive && SignalStore.fantasy.enabled && SignalStore.fantasy.signedIn
-    view.visibility = if (show) View.VISIBLE else View.GONE
-    if (!show) return
+    showFantasy = !isArchive && SignalStore.fantasy.enabled && SignalStore.fantasy.signedIn
+    showDeals = !isArchive && SignalStore.deals.enabled && SignalStore.deals.signedIn
+    view.visibility = if (showFantasy || showDeals) View.VISIBLE else View.GONE
+    if (showDeals) DealsSync.requestSync()
+    if (!showFantasy) return
 
     owner.lifecycleScope.launch {
       fantasySummary = withContext(Dispatchers.IO) { loadFantasySummary() } ?: fantasySummary
@@ -113,8 +135,32 @@ class AllInPinnedRows(private val view: ComposeView, private val owner: Lifecycl
   private fun points(value: Double) = String.format(Locale.US, "%.1f", value)
 }
 
+private fun dealsSummary(data: DealsData, status: DealsSync.Status): String {
+  val unread = data.unreadOnServer ?: data.deals.count { !it.read }
+  val starred = data.deals.count { it.starred }
+  val parts = mutableListOf("$unread unread")
+  if (starred > 0) parts += "$starred starred"
+  when (status) {
+    DealsSync.Status.Offline -> parts += "offline"
+    DealsSync.Status.SignedOut -> parts += "sign in again"
+    else -> Unit
+  }
+  if (data.pendingCount > 0) parts += "${data.pendingCount} to send"
+  return if (data.lastSync == 0L) "Your Deal Reader" else parts.joinToString(" · ")
+}
+
+@Composable
+private fun DealsRow(summary: String, onClick: () -> Unit) {
+  PinnedRow(title = "Deals", summary = summary, icon = R.drawable.symbol_tag_24, iconSize = 28, onClick = onClick)
+}
+
 @Composable
 private fun FantasyRow(summary: String?, onClick: () -> Unit) {
+  PinnedRow(title = "Fantasy Football", summary = summary ?: "Your ESPN leagues", icon = R.drawable.ic_avatar_football, iconSize = 32, onClick = onClick)
+}
+
+@Composable
+private fun PinnedRow(title: String, summary: String, @DrawableRes icon: Int, iconSize: Int, onClick: () -> Unit) {
   Row(
     modifier = Modifier
       .fillMaxWidth()
@@ -129,10 +175,10 @@ private fun FantasyRow(summary: String?, onClick: () -> Unit) {
       contentAlignment = Alignment.Center
     ) {
       Icon(
-        painter = painterResource(R.drawable.ic_avatar_football),
+        painter = painterResource(icon),
         contentDescription = null,
         tint = MaterialTheme.colorScheme.onPrimaryContainer,
-        modifier = Modifier.size(32.dp)
+        modifier = Modifier.size(iconSize.dp)
       )
     }
 
@@ -141,9 +187,9 @@ private fun FantasyRow(summary: String?, onClick: () -> Unit) {
         .weight(1f)
         .padding(start = 16.dp)
     ) {
-      Text(text = "Fantasy Football", style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurface)
+      Text(text = title, style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurface)
       Text(
-        text = summary ?: "Your ESPN leagues",
+        text = summary,
         style = MaterialTheme.typography.bodyMedium,
         color = MaterialTheme.colorScheme.onSurfaceVariant,
         maxLines = 1,

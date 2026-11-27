@@ -227,6 +227,7 @@ public class ApplicationContext extends Application implements AppForegroundObse
               .addNonBlocking(GoogleVoiceMonitor::update)
               .addNonBlocking(org.thoughtcrime.securesms.googlemessages.GoogleMessages::update)
               .addNonBlocking(() -> org.thoughtcrime.securesms.allin.family.Family.update(this))
+              .addNonBlocking(() -> org.thoughtcrime.securesms.allin.deals.DealsSync.start(this))
               .addNonBlocking(PreKeysSyncJob::enqueueIfNeeded)
               .addNonBlocking(this::initializePeriodicTasks)
               .addNonBlocking(this::initializeCircumvention)

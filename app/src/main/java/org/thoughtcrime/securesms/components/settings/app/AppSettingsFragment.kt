@@ -538,6 +538,17 @@ private fun AppSettingsContent(
         item {
           val context = LocalContext.current
           Rows.TextRow(
+            text = "Deals",
+            icon = painterResource(R.drawable.symbol_tag_24),
+            onClick = {
+              context.startActivity(org.thoughtcrime.securesms.allin.deals.DealsSettingsActivity.createIntent(context))
+            }
+          )
+        }
+
+        item {
+          val context = LocalContext.current
+          Rows.TextRow(
             text = "Fantasy Football",
             icon = painterResource(R.drawable.ic_avatar_football),
             iconModifier = Modifier.size(24.dp),
