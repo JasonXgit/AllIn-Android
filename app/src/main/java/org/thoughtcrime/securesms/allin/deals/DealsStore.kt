@@ -99,7 +99,7 @@ object DealsStore {
     synchronized(lock) {
       val next = change(_data.value)
       _data.value = next
-      save(next)
+      saveLater()
     }
   }
 
@@ -133,7 +133,19 @@ object DealsStore {
     synchronized(lock) {
       loaded = true
       _data.value = DealsData()
-      dir().deleteRecursively()
+      synchronized(saver) { dir().deleteRecursively() }
+    }
+  }
+
+  /** Saving is done off the main thread (the file can be a few MB); quick changes in a row are saved once. */
+  private val saver = java.util.concurrent.Executors.newSingleThreadExecutor()
+  private val saveQueued = java.util.concurrent.atomic.AtomicBoolean(false)
+
+  private fun saveLater() {
+    if (!saveQueued.compareAndSet(false, true)) return
+    saver.execute {
+      saveQueued.set(false)
+      synchronized(saver) { if (loaded) save(_data.value) }
     }
   }
 

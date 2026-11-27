@@ -55,6 +55,7 @@ import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -155,10 +156,20 @@ private fun DealsScreen(
   // Cards read while this screen is open stay in the Unread list until it's reopened, so nothing jumps.
   val readHere = remember { mutableStateListOf<Long>() }
 
-  val shown = when (filter) {
+  val filtered = when (filter) {
     DealsFilter.UNREAD -> data.deals.filter { !it.read || it.id in readHere }
     DealsFilter.STARRED -> data.deals.filter { it.starred }
     DealsFilter.ALL -> data.deals
+  }
+
+  // The order cards were first shown in. Deals that arrive from a sync while the screen is open go at the bottom
+  // instead of the top: new cards above the one on screen would count as "scrolled past" and be marked read unseen.
+  val order = rememberSaveable(filter) { ArrayList<Long>() }
+  val shown = run {
+    val known = order.toHashSet()
+    filtered.forEach { if (known.add(it.id)) order.add(it.id) }
+    val byId = filtered.associateBy { it.id }
+    order.mapNotNull { byId[it] }
   }
 
   Scaffolds.Settings(
@@ -308,28 +319,28 @@ private fun DealCard(
     modifier = Modifier
       .fillMaxWidth()
       .clickable(onClick = onClick)
-      .padding(end = 4.dp, top = 12.dp, bottom = 12.dp),
+      .padding(end = 4.dp, top = 14.dp, bottom = 14.dp),
     verticalAlignment = Alignment.Top
   ) {
     // Unread bar, like the website.
     Box(
       modifier = Modifier
         .width(4.dp)
-        .height(72.dp)
+        .height(83.dp)
         .background(if (deal.read) Color.Transparent else MaterialTheme.colorScheme.primary)
     )
-    Spacer(modifier = Modifier.width(12.dp))
+    Spacer(modifier = Modifier.width(14.dp))
 
     DealImage(deal, imagesVersion)
 
     Column(
       modifier = Modifier
         .weight(1f)
-        .padding(start = 12.dp)
+        .padding(start = 14.dp)
     ) {
       Text(
         text = deal.title,
-        style = MaterialTheme.typography.bodyLarge,
+        style = MaterialTheme.typography.bodyLarge.bigger(),
         fontWeight = if (deal.read) FontWeight.Normal else FontWeight.SemiBold,
         color = if (deal.expired) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurface,
         maxLines = if (expanded) 8 else 3,
@@ -344,11 +355,11 @@ private fun DealCard(
         deal.comments?.takeIf { it > 0 }?.let { add("💬 $it") }
       }.joinToString(" · ")
 
-      Row(modifier = Modifier.padding(top = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+      Row(modifier = Modifier.padding(top = 5.dp), verticalAlignment = Alignment.CenterVertically) {
         deal.price?.let {
           Text(
             text = it,
-            style = MaterialTheme.typography.bodyMedium,
+            style = MaterialTheme.typography.bodyMedium.bigger(),
             fontWeight = FontWeight.Bold,
             color = MaterialTheme.colorScheme.primary,
             modifier = Modifier.padding(end = 8.dp)
@@ -356,7 +367,7 @@ private fun DealCard(
         }
         Text(
           text = meta,
-          style = MaterialTheme.typography.bodySmall,
+          style = MaterialTheme.typography.bodySmall.bigger(),
           color = MaterialTheme.colorScheme.onSurfaceVariant,
           maxLines = 1,
           overflow = TextOverflow.Ellipsis
@@ -367,15 +378,15 @@ private fun DealCard(
         deal.summary?.let {
           Text(
             text = it,
-            style = MaterialTheme.typography.bodyMedium,
+            style = MaterialTheme.typography.bodyMedium.bigger(),
             color = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.padding(top = 8.dp)
+            modifier = Modifier.padding(top = 9.dp)
           )
         }
         Row(
           modifier = Modifier
             .horizontalScroll(rememberScrollState())
-            .padding(top = 8.dp),
+            .padding(top = 9.dp),
           horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {
           deal.link?.let { link -> AssistChip(onClick = { onOpen(link) }, label = { Text("Open deal") }) }
@@ -407,7 +418,7 @@ private fun DealImage(deal: Deal, imagesVersion: Int) {
 
   Box(
     modifier = Modifier
-      .size(72.dp)
+      .size(83.dp)
       .clip(RoundedCornerShape(8.dp))
       .background(MaterialTheme.colorScheme.surfaceVariant),
     contentAlignment = Alignment.Center
@@ -420,11 +431,14 @@ private fun DealImage(deal: Deal, imagesVersion: Int) {
         painter = painterResource(R.drawable.symbol_tag_24),
         contentDescription = null,
         tint = MaterialTheme.colorScheme.onSurfaceVariant,
-        modifier = Modifier.size(28.dp)
+        modifier = Modifier.size(32.dp)
       )
     }
   }
 }
+
+/** Deal cards are drawn about 15% bigger than Signal's usual text, for easier reading. */
+private fun TextStyle.bigger(): TextStyle = copy(fontSize = fontSize * 1.15f, lineHeight = lineHeight * 1.15f)
 
 private fun number(n: Int): String = NumberFormat.getIntegerInstance().format(n)
 

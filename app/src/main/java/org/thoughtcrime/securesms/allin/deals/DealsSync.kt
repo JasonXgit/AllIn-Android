@@ -38,7 +38,7 @@ object DealsSync {
 
   private val TAG = Log.tag(DealsSync::class.java)
 
-  private const val MAX_UNREAD = 300
+  private const val MAX_UNREAD = 3000
   private const val MAX_STARRED = 200
   private const val PAGE = 100
   private const val INTERVAL_MS = 30 * 60_000L
